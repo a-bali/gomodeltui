@@ -235,7 +235,7 @@ func (m Model) renderLogs(width int) string {
 		if request.LastTurn != "" {
 			separator := mutedStyle.Render("  ")
 			available := max(0, width-lipgloss.Width(prefix)-lipgloss.Width(separator))
-			line = prefix + separator + mutedStyle.Render(truncateText(request.LastTurn, available))
+			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
 		out = append(out, line)
 	}
@@ -264,6 +264,8 @@ func truncateText(text string, width int) string {
 	}
 	return string(runes[:width-1]) + "…"
 }
+
+func collapsePreview(text string) string { return strings.Join(strings.Fields(text), " ") }
 
 func statusStyle(status string) lipgloss.Style {
 	if len(status) == 3 && status[0] == '2' {

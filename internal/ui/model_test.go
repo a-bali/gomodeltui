@@ -77,6 +77,9 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	if got := truncateText("abcdefgh", 5); got != "abcd…" {
 		t.Fatalf("truncated=%q", got)
 	}
+	if got := collapsePreview("first line\n\nsecond   line"); got != "first line second line" {
+		t.Fatalf("preview=%q", got)
+	}
 }
 
 func TestFiveMinuteWindowShortcut(t *testing.T) {
