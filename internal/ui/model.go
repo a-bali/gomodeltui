@@ -320,12 +320,21 @@ func (m Model) renderLogs(width int) string {
 		}
 		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if start+len(out) == m.selected {
-			line = selectionStyle.Render(line)
+			line = renderSelectedLine(line)
 		}
 		line += " " + scrollbarCell(index, thumbStart, thumbEnd)
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func renderSelectedLine(line string) string {
+	const background = "\x1b[48;5;237m"
+	rendered := selectionStyle.Render(line)
+	for _, reset := range []string{"\x1b[0m", "\x1b[39m"} {
+		rendered = strings.ReplaceAll(rendered, reset, reset+background)
+	}
+	return strings.TrimSuffix(rendered, background)
 }
 
 func scrollbarThumb(rows, total, offset int) (int, int) {
