@@ -83,7 +83,7 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 }
 
 func TestFailoverExpandsToFailedAndFailoverRows(t *testing.T) {
-	request := gomodel.Request{ID: "req-1", ClientModel: "virtual-smart", Terminal: true, Success: true, Attempts: []gomodel.Attempt{{Seq: 1, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 2, ProviderName: "anthropic", Model: "claude-sonnet", StatusCode: 200, Success: true}}}
+	request := gomodel.Request{ID: "req-1", ClientModel: "virtual-smart", Terminal: true, Success: true, Attempts: []gomodel.Attempt{{Seq: 1, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 2, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 3, ProviderName: "anthropic", Model: "claude-sonnet", StatusCode: 200, Success: true}}}
 	rows := request.LogRows()
 	if len(rows) != 2 || rows[0].Success || rows[0].StatusCode != "503" || !rows[1].Success || !rows[1].Failover {
 		t.Fatalf("unexpected rows: %+v", rows)

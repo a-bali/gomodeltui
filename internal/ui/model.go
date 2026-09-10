@@ -140,18 +140,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = err.Error()
 			} else if request != nil {
 				rows := request.LogRows()
-				if index, ok := m.logIndex[request.ID]; ok {
-					m.logs = append(m.logs[:index], append(rows, m.logs[index+1:]...)...)
-					m.reindexLogs(request.ID, index, len(rows))
-				} else {
-					m.logIndex[request.ID] = len(m.logs) + len(rows) - 1
-					m.logs = append(m.logs, rows...)
-				}
+				m.replaceRequestRows(request.ID, rows)
 				terminalEvent := msg.event.Event == "audit.completed" || msg.event.Event == "audit.failed"
 				if (request.Terminal || terminalEvent) && !m.counted[request.ID] {
 					// Chart windows represent when the TUI observed the completed request.
 					// The request timestamp is retained for the log and may lag local time.
-					m.store.Add(time.Now(), request.Success)
+					for _, row := range rows {
+						m.store.Add(time.Now(), row.Success)
+					}
 					m.counted[request.ID] = true
 				}
 				if m.autoFollow {
@@ -250,23 +246,27 @@ func (m Model) renderLogs(width int) string {
 	return strings.Join(out, "\n")
 }
 
-func (m *Model) reindexLogs(logicalID string, start, rowCount int) {
-	for id, index := range m.logIndex {
-		if index >= start {
-			delete(m.logIndex, id)
-		}
-	}
-	if rowCount > 0 {
-		m.logIndex[logicalID] = start + rowCount - 1
-	}
-	for index, row := range m.logs {
-		if row.ID != logicalID && strings.Contains(row.ID, logicalID+"/attempt-") {
+func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {
+	start := len(m.logs)
+	filtered := make([]gomodel.Request, 0, len(m.logs)+len(rows))
+	for _, row := range m.logs {
+		if row.ID == logicalID || strings.HasPrefix(row.ID, logicalID+"/attempt-") {
+			if start == len(m.logs) {
+				start = len(filtered)
+			}
 			continue
 		}
-		if index >= start+rowCount {
-			if _, ok := m.logIndex[row.ID]; !ok {
-				m.logIndex[row.ID] = index
-			}
+		filtered = append(filtered, row)
+	}
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	filtered = append(filtered[:start], append(rows, filtered[start:]...)...)
+	m.logs = filtered
+	m.logIndex = make(map[string]int)
+	for index, row := range m.logs {
+		if !strings.Contains(row.ID, "/attempt-") {
+			m.logIndex[row.ID] = index
 		}
 	}
 }

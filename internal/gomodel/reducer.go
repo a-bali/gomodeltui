@@ -49,8 +49,16 @@ func (r Request) LogRows() []Request {
 	if !r.Terminal || len(r.Attempts) <= 1 {
 		return []Request{r}
 	}
-	rows := make([]Request, 0, len(r.Attempts))
-	for index, attempt := range r.Attempts {
+	collapsed := make([]Attempt, 0, len(r.Attempts))
+	for _, attempt := range r.Attempts {
+		if len(collapsed) > 0 && !attempt.Success && !collapsed[len(collapsed)-1].Success && attemptKey(attempt) == attemptKey(collapsed[len(collapsed)-1]) {
+			collapsed[len(collapsed)-1] = attempt
+			continue
+		}
+		collapsed = append(collapsed, attempt)
+	}
+	rows := make([]Request, 0, len(collapsed))
+	for index, attempt := range collapsed {
 		provider := attempt.ProviderName
 		if provider == "" {
 			provider = attempt.ProviderType
@@ -84,6 +92,10 @@ func (r Request) LogRows() []Request {
 	rows[len(rows)-1].OutputTokens = r.OutputTokens
 	rows[len(rows)-1].LastTurn = r.LastTurn
 	return rows
+}
+
+func attemptKey(attempt Attempt) string {
+	return fmt.Sprintf("%s|%s|%d|%s|%s", attempt.ProviderName, attempt.ProviderType, attempt.StatusCode, attempt.ErrorType, attempt.ErrorCode)
 }
 
 func (r Request) TimestampOrNow() time.Time {
