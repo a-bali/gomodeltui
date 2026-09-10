@@ -12,11 +12,14 @@ type Request struct {
 	ID           string
 	Timestamp    time.Time
 	UserPath     string
+	ClientModel  string
+	RoutedModel  string
 	Model        string
 	Provider     string
 	Endpoint     string
 	StatusCode   string
 	InputTokens  int
+	CacheRatio   float64
 	OutputTokens int
 	Error        string
 	Duration     time.Duration
@@ -75,7 +78,17 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 		request.Provider = value
 	}
 	if value := firstString(fields["resolved_model"], fields["requested_model"], fields["model"]); value != "" {
+		if requested := firstString(fields["requested_model"]); requested != "" {
+			request.ClientModel = requested
+		}
+		request.RoutedModel = routedModel(value, request.Provider)
 		request.Model = canonicalModel(value, request.Provider)
+	}
+	if value := firstString(fields["requested_model"]); value != "" {
+		request.ClientModel = value
+	}
+	if value, ok := firstFloat(fields["cached_input_ratio"]); ok {
+		request.CacheRatio = value
 	}
 	if value := firstString(fields["path"], fields["endpoint"]); value != "" {
 		request.Endpoint = value
@@ -113,6 +126,14 @@ func canonicalModel(model, provider string) string {
 	return model
 }
 
+func routedModel(model, provider string) string {
+	model = canonicalModel(model, provider)
+	if provider == "" {
+		return model
+	}
+	return provider + "/" + model
+}
+
 func firstInt(value any) int {
 	if number, ok := value.(float64); ok {
 		return int(number)
@@ -122,6 +143,17 @@ func firstInt(value any) int {
 		return number
 	}
 	return 0
+}
+
+func firstFloat(value any) (float64, bool) {
+	if number, ok := value.(float64); ok {
+		return number, true
+	}
+	if text, ok := value.(string); ok {
+		number, err := strconv.ParseFloat(text, 64)
+		return number, err == nil
+	}
+	return 0, false
 }
 
 func firstString(values ...any) string {

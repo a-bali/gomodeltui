@@ -37,6 +37,9 @@ func TestReducerCollapsesLifecycle(t *testing.T) {
 	if request.UserPath != "/team/a" || request.Model != "gpt-4o" || request.Provider != "openai" || request.StatusCode != "200" {
 		t.Fatalf("unexpected request metadata: %+v", request)
 	}
+	if request.ClientModel != "gpt-4o" || request.RoutedModel != "openai/gpt-4o" {
+		t.Fatalf("unexpected model routing: %+v", request)
+	}
 	if request.InputTokens != 12 || request.OutputTokens != 8 || request.Duration != 120*time.Millisecond {
 		t.Fatalf("unexpected token counts: %+v", request)
 	}

@@ -203,7 +203,7 @@ func (m Model) renderLogs(width int) string {
 		if request.Duration > 0 {
 			responseTime = fmt.Sprintf("%dms", request.Duration/time.Millisecond)
 		}
-		line := fmt.Sprintf("%s %s %-12s %-16s %-20s in:%d out:%d status:%s rt:%s", icon, timestamp, request.UserPath, request.Provider, request.Model, request.InputTokens, request.OutputTokens, request.StatusCode, responseTime)
+		line := fmt.Sprintf("%s %s client:%-16s route:%-36s in:%d cache:%3.0f%% out:%d code:%s rt:%s", icon, timestamp, request.ClientModel, request.RoutedModel, request.InputTokens, request.CacheRatio*100, request.OutputTokens, request.StatusCode, responseTime)
 		if request.Error != "" {
 			line += " " + request.Error
 		}
