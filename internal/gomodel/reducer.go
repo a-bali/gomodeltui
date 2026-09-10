@@ -21,6 +21,13 @@ type Request struct {
 	Success   bool
 }
 
+func (r Request) TimestampOrNow() time.Time {
+	if r.Timestamp.IsZero() {
+		return time.Now()
+	}
+	return r.Timestamp
+}
+
 type Reducer struct {
 	requests map[string]*Request
 }
