@@ -9,16 +9,19 @@ import (
 )
 
 type Request struct {
-	ID        string
-	Timestamp time.Time
-	Model     string
-	Provider  string
-	Endpoint  string
-	Status    string
-	Error     string
-	Duration  time.Duration
-	Terminal  bool
-	Success   bool
+	ID           string
+	Timestamp    time.Time
+	UserPath     string
+	Model        string
+	Provider     string
+	Endpoint     string
+	StatusCode   string
+	InputTokens  int
+	OutputTokens int
+	Error        string
+	Duration     time.Duration
+	Terminal     bool
+	Success      bool
 }
 
 func (r Request) TimestampOrNow() time.Time {
@@ -62,21 +65,55 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 		request = &Request{ID: requestID}
 		r.requests[requestID] = request
 	}
-	request.Timestamp = parseTime(firstString(payload.Timestamp, fields["timestamp"]))
-	request.Model = firstString(fields["resolved_model"], fields["requested_model"], fields["model"])
-	request.Provider = firstString(fields["provider_name"], fields["provider"])
-	request.Endpoint = firstString(fields["path"], fields["endpoint"])
-	request.Status = firstString(fields["status_code"], fields["status"])
-	request.Error = firstString(fields["error"], fields["error_type"])
-	request.Duration = parseDuration(fields["duration_ns"], fields["duration_ms"])
+	if timestamp := parseTime(firstString(payload.Timestamp, fields["timestamp"])); !timestamp.IsZero() {
+		request.Timestamp = timestamp
+	}
+	if value := firstString(fields["user_path"]); value != "" {
+		request.UserPath = value
+	}
+	if value := firstString(fields["resolved_model"], fields["requested_model"], fields["model"]); value != "" {
+		request.Model = value
+	}
+	if value := firstString(fields["provider_name"], fields["provider"]); value != "" {
+		request.Provider = value
+	}
+	if value := firstString(fields["path"], fields["endpoint"]); value != "" {
+		request.Endpoint = value
+	}
+	if value := firstString(fields["status_code"], fields["status"]); value != "" {
+		request.StatusCode = value
+	}
+	if value := firstInt(fields["input_tokens"]); value > 0 {
+		request.InputTokens = value
+	}
+	if value := firstInt(fields["output_tokens"]); value > 0 {
+		request.OutputTokens = value
+	}
+	if value := firstString(fields["error"], fields["error_type"]); value != "" {
+		request.Error = value
+	}
+	if value := parseDuration(fields["duration_ns"], fields["duration_ms"]); value > 0 {
+		request.Duration = value
+	}
 
 	eventType := firstString(payload.Type, event.Event)
-	if strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed") {
+	if strings.HasPrefix(eventType, "audit.") && (strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed")) {
 		request.Terminal = true
-		request.Success = request.Error == "" && !isErrorStatus(request.Status)
+		request.Success = request.Error == "" && !isErrorStatus(request.StatusCode)
 	}
 	copy := *request
 	return &copy, nil
+}
+
+func firstInt(value any) int {
+	if number, ok := value.(float64); ok {
+		return int(number)
+	}
+	if text, ok := value.(string); ok {
+		number, _ := strconv.Atoi(text)
+		return number
+	}
+	return 0
 }
 
 func firstString(values ...any) string {
@@ -100,8 +137,11 @@ func parseTime(value string) time.Time {
 }
 
 func parseDuration(values ...any) time.Duration {
-	for _, value := range values {
+	for index, value := range values {
 		if number, ok := value.(float64); ok {
+			if index == 1 {
+				return time.Duration(number) * time.Millisecond
+			}
 			return time.Duration(number)
 		}
 	}

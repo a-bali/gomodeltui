@@ -44,7 +44,11 @@ func NewModel(client *gomodel.Client) *Model {
 	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), autoFollow: true}
 }
 
-func (m Model) Init() tea.Cmd { return connectCmd(m.client, m.lastEventID) }
+func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
+
+func refreshCmd() tea.Cmd {
+	return tea.Tick(3*time.Second, func(at time.Time) tea.Msg { return tickMsg(at) })
+}
 
 func connectCmd(client *gomodel.Client, lastID string) tea.Cmd {
 	return func() tea.Msg {
@@ -151,9 +155,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.stream.Close()
 			m.stream = nil
 		}
-		return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return tickMsg(time.Now()) })
+		return m, refreshCmd()
 	case tickMsg:
-		return m, connectCmd(m.client, m.lastEventID)
+		if m.connected {
+			return m, refreshCmd()
+		}
+		return m, tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd())
 	}
 	return m, nil
 }
@@ -185,7 +192,15 @@ func (m Model) renderLogs(width int) string {
 		if request.Terminal && !request.Success {
 			icon = errorStyle.Render("✗")
 		}
-		line := fmt.Sprintf("%s %-20s %-16s %s", icon, request.Model, request.Provider, request.Status)
+		timestamp := request.Timestamp.Format("15:04:05")
+		if request.Timestamp.IsZero() {
+			timestamp = "--:--:--"
+		}
+		responseTime := "-"
+		if request.Duration > 0 {
+			responseTime = fmt.Sprintf("%dms", request.Duration/time.Millisecond)
+		}
+		line := fmt.Sprintf("%s %s %-12s %-16s %-20s in:%d out:%d status:%s rt:%s", icon, timestamp, request.UserPath, request.Provider, request.Model, request.InputTokens, request.OutputTokens, request.StatusCode, responseTime)
 		if request.Error != "" {
 			line += " " + request.Error
 		}
