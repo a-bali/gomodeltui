@@ -67,10 +67,20 @@ type popupMessage struct {
 
 func buildPopupSummaryLines(raw string) []string {
 	lines := buildPopupLines(raw)
+	messageIndex := -1
 	for index, line := range lines {
 		if strings.HasPrefix(line, "MESSAGES (") {
-			return append(lines[:index], "", "  Message blocks available in the Messages tab.")
+			messageIndex = index
+			break
 		}
+	}
+	if messageIndex >= 0 {
+		for index := messageIndex; index < len(lines); index++ {
+			if lines[index] == "RESPONSE" {
+				return append(append(append([]string{}, lines[:messageIndex]...), ""), lines[index:]...)
+			}
+		}
+		return append(append([]string{}, lines[:messageIndex]...), "")
 	}
 	return lines
 }
@@ -98,7 +108,7 @@ func parsePopupMessages(raw string) []popupMessage {
 		if len(formatted) > 0 {
 			formatted = formatted[1:]
 		}
-		result = append(result, popupMessage{role: role, lines: formatted, expanded: role != "system" && role != "developer"})
+		result = append(result, popupMessage{role: role, lines: formatted, expanded: index == len(messages)-1})
 	}
 	return result
 }

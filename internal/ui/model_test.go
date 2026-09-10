@@ -269,6 +269,10 @@ func TestPopupInspectorExtractsMessagesAndToolCalls(t *testing.T) {
 			t.Fatalf("inspector missing %q in %q", want, got)
 		}
 	}
+	withResponse := `{"data":{"request_body":{"messages":[]},"response_body":{"choices":[{"message":{"content":"answer"}}]}}}`
+	if got := strings.Join(buildPopupSummaryLines(withResponse), "\n"); !strings.Contains(got, "RESPONSE") || !strings.Contains(got, "answer") {
+		t.Fatalf("response section missing: %q", got)
+	}
 }
 
 func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
@@ -280,6 +284,9 @@ func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 	if len(model.popupMessages) != 3 || model.popupMessages[0].expanded {
 		t.Fatalf("popup defaults: messages=%d expanded=%v", len(model.popupMessages), model.popupMessages[0].expanded)
 	}
+	if !model.popupMessages[2].expanded || strings.Contains(strings.Join(model.popupLines, "\n"), "Messages tab") {
+		t.Fatal("popup default expansion or stale tab text")
+	}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.popupMessages[0].expanded {
 		t.Fatal("Enter did not expand selected message")
@@ -287,6 +294,14 @@ func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
 	if model.popupMessage != 1 {
 		t.Fatalf("message selection=%d", model.popupMessage)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if model.popupMessages[1].expanded {
+		t.Fatal("Left did not collapse selected message")
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if !model.popupMessages[1].expanded {
+		t.Fatal("Right did not expand selected message")
 	}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeySpace})
 	for index, message := range model.popupMessages {

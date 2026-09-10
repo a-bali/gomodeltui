@@ -105,6 +105,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.popupMessages[m.popupMessage].expanded = !m.popupMessages[m.popupMessage].expanded
 					m.ensurePopupMessageVisible()
 				}
+			case "left":
+				if !m.popupRaw && len(m.popupMessages) > 0 {
+					m.popupMessages[m.popupMessage].expanded = false
+					m.ensurePopupMessageVisible()
+				}
+			case "right":
+				if !m.popupRaw && len(m.popupMessages) > 0 {
+					m.popupMessages[m.popupMessage].expanded = true
+					m.ensurePopupMessageVisible()
+				}
 			case "space", " ":
 				if !m.popupRaw {
 					m.popupAll = !m.popupAll
@@ -497,10 +507,10 @@ func (m Model) renderOnePopupMessage(index int) []string {
 	var lines []string
 	marker := "  "
 	if index == m.popupMessage {
-		marker = "▶ "
+		marker = "> "
 	}
 	role := popupRoleStyle(message.role).Render(strings.ToUpper(message.role))
-	state := "..."
+	state := "▶"
 	if message.expanded {
 		state = "▼"
 	}
@@ -520,7 +530,7 @@ func styleStructuredLine(line string) string {
 	if trimmed == "REQUEST" || strings.HasPrefix(trimmed, "ROUTING ATTEMPTS") || strings.HasPrefix(trimmed, "RESPONSE") || strings.HasPrefix(trimmed, "MESSAGES") {
 		return popupSectionStyle.Render(line)
 	}
-	if strings.HasPrefix(trimmed, "▶") || strings.HasPrefix(trimmed, "▼") || strings.HasPrefix(trimmed, "...") {
+	if strings.HasPrefix(trimmed, ">") || strings.HasPrefix(trimmed, "▶") || strings.HasPrefix(trimmed, "▼") || strings.HasPrefix(trimmed, "...") {
 		return line
 	}
 	if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
