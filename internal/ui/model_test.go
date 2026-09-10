@@ -320,12 +320,28 @@ func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 }
 
 func TestPopupWithResponseStaysAtTop(t *testing.T) {
-	raw := `{"data":{"request_body":{"messages":[{"role":"user","content":"hello"}]},"response_body":{"choices":[{"message":{"content":"answer"}}]}}}`
+	raw := `{"type":"audit.completed","data":{"request_body":{"messages":[{"role":"user","content":"hello"}]},"response_body":{"choices":[{"message":{"content":"answer"}}]}}}`
 	model := NewModel(nil)
 	model.width, model.height = 80, 8
 	model.logs = []gomodel.Request{{RawJSON: raw}}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if model.popupOffset != 0 || !popupHasResponse(raw) {
-		t.Fatalf("response popup position: offset=%d has_response=%v", model.popupOffset, popupHasResponse(raw))
+	_, final := popupResponseState(raw)
+	if model.popupOffset != 0 || !popupHasResponse(raw) || !final {
+		t.Fatalf("response popup position: offset=%d has_response=%v final=%v", model.popupOffset, popupHasResponse(raw), final)
+	}
+}
+
+func TestPopupShowsThinkingAndSeparatesMessages(t *testing.T) {
+	raw := `{"type":"audit.updated","data":{"request_body":{"messages":[{"role":"assistant","thinking":"checking tools","content":"answer"}]},"response_body":{"partial":true}}}`
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{RawJSON: raw}}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := strings.Join(model.popupContentLines(), "\n")
+	if !strings.Contains(got, "MESSAGES (1)") || !strings.Contains(got, "thinking:") {
+		t.Fatalf("missing message header/thinking: %q", got)
+	}
+	if !strings.Contains(got, "RESPONSE\n") {
+		t.Fatalf("missing response section: %q", got)
 	}
 }

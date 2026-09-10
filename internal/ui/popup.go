@@ -122,6 +122,20 @@ func popupHasResponse(raw string) bool {
 	return ok && value != nil
 }
 
+func popupResponseState(raw string) (hasResponse, final bool) {
+	var root any
+	if json.Unmarshal([]byte(raw), &root) != nil {
+		return false, false
+	}
+	response, ok := findJSONValue(root, "response_body")
+	if !ok || response == nil {
+		return false, false
+	}
+	lifecycle, _ := findJSONValue(root, "type")
+	typeName, _ := lifecycle.(string)
+	return true, strings.HasSuffix(typeName, ".completed") || strings.HasSuffix(typeName, ".failed")
+}
+
 func popupRoleStyle(role string) lipgloss.Style {
 	switch strings.ToLower(role) {
 	case "system":
@@ -223,6 +237,12 @@ func formatMessage(index int, value any) []string {
 			}
 		} else {
 			lines = append(lines, formatContentBlocks(content)...)
+		}
+	}
+	for _, key := range []string{"thinking", "reasoning_content", "reasoning"} {
+		if thought, ok := item[key].(string); ok && thought != "" {
+			lines = append(lines, "      thinking:")
+			lines = appendIndented(lines, thought, "        ")
 		}
 	}
 	return lines

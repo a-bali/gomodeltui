@@ -247,7 +247,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popupMessages = parsePopupMessages(m.logs[m.selected].RawJSON)
 				if len(m.popupMessages) > 0 {
 					m.popupMessage = len(m.popupMessages) - 1
-					if !popupHasResponse(m.logs[m.selected].RawJSON) {
+					_, final := popupResponseState(m.logs[m.selected].RawJSON)
+					if final {
+						for index := range m.popupMessages {
+							m.popupMessages[index].expanded = false
+						}
+					} else {
 						m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
 					}
 				}
@@ -472,7 +477,11 @@ func (m Model) renderPopup() string {
 func (m Model) popupContentLines() []string {
 	lines := m.popupLines
 	if !m.popupRaw && len(m.popupMessages) > 0 {
-		lines = append(append([]string{}, m.popupLines...), m.renderPopupMessages()...)
+		lines = append([]string{}, m.popupLines...)
+		if hasResponse, _ := popupResponseState(strings.Join(m.popupRawLines, "\n")); hasResponse {
+			lines = append(lines, "")
+		}
+		lines = append(lines, m.renderPopupMessages()...)
 	}
 	if m.popupRaw && len(m.popupRawLines) > 0 {
 		lines = m.popupRawLines
@@ -501,7 +510,7 @@ func (m *Model) ensurePopupMessageVisible() {
 }
 
 func (m Model) renderPopupMessages() []string {
-	var lines []string
+	lines := []string{fmt.Sprintf("MESSAGES (%d)", len(m.popupMessages))}
 	for index := range m.popupMessages {
 		lines = append(lines, m.renderOnePopupMessage(index)...)
 	}
