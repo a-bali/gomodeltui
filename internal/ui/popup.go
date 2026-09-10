@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func buildPopupLines(raw string) []string {
@@ -55,6 +57,73 @@ func buildPopupLines(raw string) []string {
 		lines = append(lines, "  No structured request body found.")
 	}
 	return lines
+}
+
+const (
+	popupTabSummary = iota
+	popupTabMessages
+	popupTabRaw
+)
+
+type popupMessage struct {
+	role     string
+	lines    []string
+	expanded bool
+}
+
+func buildPopupSummaryLines(raw string) []string {
+	lines := buildPopupLines(raw)
+	for index, line := range lines {
+		if strings.HasPrefix(line, "MESSAGES (") {
+			return append(lines[:index], "", "  Message blocks available in the Messages tab.")
+		}
+	}
+	return lines
+}
+
+func parsePopupMessages(raw string) []popupMessage {
+	var root any
+	if json.Unmarshal([]byte(raw), &root) != nil {
+		return nil
+	}
+	body, ok := findJSONValue(root, "request_body")
+	if !ok {
+		return nil
+	}
+	messages, ok := bodyMessages(body)
+	if !ok {
+		return nil
+	}
+	result := make([]popupMessage, 0, len(messages))
+	for index, value := range messages {
+		formatted := formatMessage(index+1, value)
+		role := "unknown"
+		if item, ok := value.(map[string]any); ok {
+			role = firstJSONString(item, "role", "type")
+		}
+		if len(formatted) > 0 {
+			formatted = formatted[1:]
+		}
+		result = append(result, popupMessage{role: role, lines: formatted, expanded: role != "system" && role != "developer"})
+	}
+	return result
+}
+
+func popupRoleStyle(role string) lipgloss.Style {
+	switch strings.ToLower(role) {
+	case "system":
+		return popupSystemStyle
+	case "developer":
+		return popupDeveloperStyle
+	case "user":
+		return popupUserStyle
+	case "assistant":
+		return popupAssistantStyle
+	case "tool", "tool_result", "function":
+		return popupToolStyle
+	default:
+		return mutedStyle
+	}
 }
 
 func findJSONValue(value any, key string) (any, bool) {
@@ -130,6 +199,10 @@ func formatMessage(index int, value any) []string {
 	}
 	if content, ok := item["content"]; ok {
 		if text, ok := content.(string); ok {
+			if strings.EqualFold(role, "tool") {
+				lines = append(lines, formatToolResult(text)...)
+				return lines
+			}
 			if function := functionName(text); function != "" {
 				lines = append(lines, "      function: "+function)
 			} else {
@@ -140,6 +213,22 @@ func formatMessage(index int, value any) []string {
 		}
 	}
 	return lines
+}
+
+func formatToolResult(text string) []string {
+	var value any
+	if json.Unmarshal([]byte(strings.TrimSpace(text)), &value) == nil {
+		if item, ok := value.(map[string]any); ok {
+			if exitCode, exists := item["exit_code"]; exists {
+				lines := []string{"      exit_code: " + displayJSONValue(exitCode)}
+				if output, exists := item["output"]; exists {
+					return appendIndented(lines, displayJSONValue(output), "      output: ")
+				}
+				return lines
+			}
+		}
+	}
+	return appendIndented(nil, text, "      output: ")
 }
 
 func formatToolCall(value any) []string {

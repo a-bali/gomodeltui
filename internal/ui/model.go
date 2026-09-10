@@ -41,6 +41,10 @@ type Model struct {
 	popupLines    []string
 	popupRawLines []string
 	popupRaw      bool
+	popupTab      int
+	popupMessages []popupMessage
+	popupMessage  int
+	popupAll      bool
 	popupOffset   int
 	searching     bool
 	searchQuery   string
@@ -90,17 +94,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.popup {
 			switch msg.String() {
-			case "enter", "esc":
+			case "esc":
 				m.popup = false
+			case "tab":
+				m.popupTab = (m.popupTab + 1) % 3
+				m.popupRaw = m.popupTab == popupTabRaw
+				m.popupOffset = 0
 			case "r":
 				m.popupRaw = !m.popupRaw
+				if m.popupRaw {
+					m.popupTab = popupTabRaw
+				} else {
+					m.popupTab = popupTabSummary
+				}
 				m.popupOffset = 0
+			case "enter":
+				if m.popupTab == popupTabMessages && len(m.popupMessages) > 0 {
+					m.popupMessages[m.popupMessage].expanded = !m.popupMessages[m.popupMessage].expanded
+					m.popupOffset = 0
+				}
+			case "space", " ":
+				if m.popupTab == popupTabMessages {
+					m.popupAll = !m.popupAll
+					for index := range m.popupMessages {
+						m.popupMessages[index].expanded = m.popupAll
+					}
+					m.popupOffset = 0
+				}
 			case "up":
-				if m.popupOffset > 0 {
+				if m.popupTab == popupTabMessages && m.popupMessage > 0 {
+					m.popupMessage--
+					m.popupOffset = 0
+				} else if m.popupOffset > 0 {
 					m.popupOffset--
 				}
 			case "down":
-				if m.popupOffset < max(0, len(m.popupContentLines())-popupRows(m.height)) {
+				if m.popupTab == popupTabMessages && m.popupMessage+1 < len(m.popupMessages) {
+					m.popupMessage++
+					m.popupOffset = 0
+				} else if m.popupOffset < max(0, len(m.popupContentLines())-popupRows(m.height)) {
 					m.popupOffset++
 				}
 			case "pgup", "pageup":
@@ -109,7 +141,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popupOffset = min(max(0, len(m.popupContentLines())-popupRows(m.height)), m.popupOffset+popupRows(m.height))
 			case "home", "ctrl+home":
 				m.popupOffset = 0
+				m.popupMessage = 0
 			case "end", "ctrl+end":
+				if m.popupTab == popupTabMessages && len(m.popupMessages) > 0 {
+					m.popupMessage = len(m.popupMessages) - 1
+				}
 				m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
 			}
 			return m, nil
@@ -202,8 +238,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popup = true
 				m.popupOffset = 0
 				m.popupRaw = false
+				m.popupTab = popupTabSummary
+				m.popupMessage = 0
+				m.popupAll = false
 				m.popupRawLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
-				m.popupLines = buildPopupLines(m.logs[m.selected].RawJSON)
+				m.popupLines = buildPopupSummaryLines(m.logs[m.selected].RawJSON)
+				m.popupMessages = parsePopupMessages(m.logs[m.selected].RawJSON)
 			}
 		case "r":
 			if m.stream != nil {
@@ -404,10 +444,13 @@ func (m Model) renderPopup() string {
 	start := min(m.popupOffset, max(0, len(lines)-rows))
 	end := min(len(lines), start+rows)
 	thumbStart, thumbEnd := scrollbarThumb(rows, len(lines), start)
-	header := "Request inspector  (Enter/Esc close  r raw JSON  Home/End  ↑↓/PgUp/PgDn scroll)"
-	if m.popupRaw {
-		header = "Raw JSON  (Enter/Esc close  r inspector  Home/End  ↑↓/PgUp/PgDn scroll)"
+	tab := "Summary"
+	if m.popupTab == popupTabMessages {
+		tab = "Messages"
+	} else if m.popupRaw {
+		tab = "Raw JSON"
 	}
+	header := fmt.Sprintf("Request %s  [Summary] [Messages] [Raw JSON]  Tab switch  Enter expand  Space all  Esc close", tab)
 	content := []string{truncateText(header, max(1, m.width))}
 	for _, line := range lines[start:end] {
 		if m.popupRaw {
@@ -422,10 +465,37 @@ func (m Model) renderPopup() string {
 
 func (m Model) popupContentLines() []string {
 	lines := m.popupLines
+	if m.popupTab == popupTabMessages && len(m.popupMessages) > 0 {
+		lines = m.renderPopupMessages()
+	}
 	if m.popupRaw && len(m.popupRawLines) > 0 {
 		lines = m.popupRawLines
 	}
 	return wrapJSONLines(lines, max(1, m.width-2))
+}
+
+func (m Model) renderPopupMessages() []string {
+	var lines []string
+	for index, message := range m.popupMessages {
+		marker := "  "
+		if index == m.popupMessage {
+			marker = "▶ "
+		}
+		role := popupRoleStyle(message.role).Render(strings.ToUpper(message.role))
+		state := "collapsed"
+		if message.expanded {
+			state = "expanded"
+		}
+		lines = append(lines, fmt.Sprintf("%s[%d] %s  %s", marker, index+1, role, mutedStyle.Render(state)))
+		if message.expanded {
+			for _, line := range message.lines {
+				lines = append(lines, "    "+line)
+			}
+		} else {
+			lines = append(lines, "    "+mutedStyle.Render("(content hidden; press Enter to expand)"))
+		}
+	}
+	return lines
 }
 
 func wrapJSONLines(lines []string, width int) []string {

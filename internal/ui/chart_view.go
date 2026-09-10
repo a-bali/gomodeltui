@@ -16,6 +16,11 @@ var jsonKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
 var jsonStringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
 var jsonNumberStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
 var jsonLiteralStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+var popupSystemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+var popupDeveloperStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
+var popupUserStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
+var popupAssistantStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+var popupToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
 
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
