@@ -29,7 +29,10 @@ func TestMaxTotalAndNextWindow(t *testing.T) {
 	if got := NextWindow(Window1h, 1); got != Window3h {
 		t.Fatalf("next=%v", got)
 	}
-	if got := NextWindow(Window15m, -1); got != Window15m {
+	if got := NextWindow(Window5m, -1); got != Window5m {
+		t.Fatalf("lowest=%v", got)
+	}
+	if got := NextWindow(Window15m, -1); got != Window5m {
 		t.Fatalf("lower=%v", got)
 	}
 	if got := NextWindow(Window24h, 1); got != Window24h {

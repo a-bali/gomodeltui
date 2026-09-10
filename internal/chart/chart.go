@@ -8,6 +8,7 @@ import (
 type Window time.Duration
 
 const (
+	Window5m  Window = Window(5 * time.Minute)
 	Window15m Window = Window(15 * time.Minute)
 	Window1h  Window = Window(time.Hour)
 	Window3h  Window = Window(3 * time.Hour)
@@ -16,7 +17,7 @@ const (
 	Window24h Window = Window(24 * time.Hour)
 )
 
-var Windows = []Window{Window15m, Window1h, Window3h, Window6h, Window12h, Window24h}
+var Windows = []Window{Window5m, Window15m, Window1h, Window3h, Window6h, Window12h, Window24h}
 
 type Bucket struct {
 	Start   time.Time

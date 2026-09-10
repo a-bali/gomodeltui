@@ -8,6 +8,7 @@ import (
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestCompletedAuditEventFeedsChart(t *testing.T) {
@@ -57,5 +58,13 @@ func TestRequestRowFormatAndStableUserPathColor(t *testing.T) {
 	}
 	if userPathStyle("/team/a").GetForeground() == userPathStyle("/team/b").GetForeground() {
 		t.Fatal("expected distinct user path colors")
+	}
+}
+
+func TestFiveMinuteWindowShortcut(t *testing.T) {
+	model := NewModel(nil)
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	if model.window != chart.Window5m {
+		t.Fatalf("window=%v", model.window)
 	}
 }

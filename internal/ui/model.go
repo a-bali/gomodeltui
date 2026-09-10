@@ -88,16 +88,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "-":
 			m.window = chart.NextWindow(m.window, 1)
 		case "1":
-			m.window = chart.Window15m
+			m.window = chart.Window5m
 		case "2":
-			m.window = chart.Window1h
+			m.window = chart.Window15m
 		case "3":
-			m.window = chart.Window3h
+			m.window = chart.Window1h
 		case "4":
-			m.window = chart.Window6h
+			m.window = chart.Window3h
 		case "5":
-			m.window = chart.Window12h
+			m.window = chart.Window6h
 		case "6":
+			m.window = chart.Window12h
+		case "7":
 			m.window = chart.Window24h
 		case "space":
 			m.paused = !m.paused
@@ -183,7 +185,7 @@ func (m Model) View() string {
 		status = "○ disconnected: " + m.err
 	}
 	left := lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
-	keys := mutedStyle.Render("1-6 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit")
+	keys := mutedStyle.Render("1-7 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit")
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
 	chartText := renderChart(m.store.Snapshot(time.Now(), m.window), chartWidth, chartHeight)
