@@ -21,6 +21,9 @@ var popupDeveloperStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("141"))
 var popupUserStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
 var popupAssistantStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 var popupToolStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+var popupSectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("213"))
+var popupKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {

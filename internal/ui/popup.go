@@ -59,12 +59,6 @@ func buildPopupLines(raw string) []string {
 	return lines
 }
 
-const (
-	popupTabSummary = iota
-	popupTabMessages
-	popupTabRaw
-)
-
 type popupMessage struct {
 	role     string
 	lines    []string
