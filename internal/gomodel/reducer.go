@@ -71,11 +71,11 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if value := firstString(fields["user_path"]); value != "" {
 		request.UserPath = value
 	}
-	if value := firstString(fields["resolved_model"], fields["requested_model"], fields["model"]); value != "" {
-		request.Model = value
-	}
 	if value := firstString(fields["provider_name"], fields["provider"]); value != "" {
 		request.Provider = value
+	}
+	if value := firstString(fields["resolved_model"], fields["requested_model"], fields["model"]); value != "" {
+		request.Model = canonicalModel(value, request.Provider)
 	}
 	if value := firstString(fields["path"], fields["endpoint"]); value != "" {
 		request.Endpoint = value
@@ -103,6 +103,14 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	}
 	copy := *request
 	return &copy, nil
+}
+
+func canonicalModel(model, provider string) string {
+	prefix := strings.TrimSpace(provider) + "/"
+	if provider != "" && strings.HasPrefix(model, prefix) {
+		return strings.TrimPrefix(model, prefix)
+	}
+	return model
 }
 
 func firstInt(value any) int {

@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+func TestCanonicalModelRemovesProviderPrefix(t *testing.T) {
+	if got := canonicalModel("commandcode-goat/deepseek/deepseek-v4.1-flash", "commandcode-goat"); got != "deepseek/deepseek-v4.1-flash" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestReducerCollapsesLifecycle(t *testing.T) {
 	r := NewReducer()
 	for _, raw := range []string{

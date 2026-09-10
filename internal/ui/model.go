@@ -29,6 +29,7 @@ type Model struct {
 	window        chart.Window
 	logs          []gomodel.Request
 	logIndex      map[string]int
+	counted       map[string]bool
 	stream        io.ReadCloser
 	reader        *bufio.Reader
 	lastEventID   string
@@ -41,7 +42,7 @@ type Model struct {
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), autoFollow: true}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), autoFollow: true}
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
@@ -70,7 +71,7 @@ func readEventCmd(reader *bufio.Reader) tea.Cmd {
 	}
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -102,6 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.logs = nil
 			m.logIndex = make(map[string]int)
+			m.counted = make(map[string]bool)
 			m.logOffset = 0
 		case "up":
 			if m.logOffset > 0 {
@@ -140,8 +142,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.logIndex[request.ID] = len(m.logs)
 					m.logs = append(m.logs, *request)
 				}
-				if request.Terminal {
+				if request.Terminal && !m.counted[request.ID] {
 					m.store.Add(request.TimestampOrNow(), request.Success)
+					m.counted[request.ID] = true
 				}
 				if m.autoFollow {
 					m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
