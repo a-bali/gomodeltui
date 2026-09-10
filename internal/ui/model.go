@@ -245,6 +245,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popupRawLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
 				m.popupLines = buildPopupSummaryLines(m.logs[m.selected].RawJSON)
 				m.popupMessages = parsePopupMessages(m.logs[m.selected].RawJSON)
+				if len(m.popupMessages) > 0 {
+					m.popupMessage = len(m.popupMessages) - 1
+					if !popupHasResponse(m.logs[m.selected].RawJSON) {
+						m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
+					}
+				}
 			}
 		case "r":
 			if m.stream != nil {

@@ -113,6 +113,15 @@ func parsePopupMessages(raw string) []popupMessage {
 	return result
 }
 
+func popupHasResponse(raw string) bool {
+	var root any
+	if json.Unmarshal([]byte(raw), &root) != nil {
+		return false
+	}
+	value, ok := findJSONValue(root, "response_body")
+	return ok && value != nil
+}
+
 func popupRoleStyle(role string) lipgloss.Style {
 	switch strings.ToLower(role) {
 	case "system":

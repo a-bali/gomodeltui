@@ -278,7 +278,7 @@ func TestPopupInspectorExtractsMessagesAndToolCalls(t *testing.T) {
 func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 	raw := `{"request_id":"req-1","data":{"request_body":{"messages":[{"role":"system","content":"rules"},{"role":"user","content":"hello"},{"role":"tool","content":"{\"exit_code\":0,\"output\":\"done\"}"}]}}}`
 	model := NewModel(nil)
-	model.width, model.height = 80, 20
+	model.width, model.height = 80, 8
 	model.logs = []gomodel.Request{{RawJSON: raw}}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if len(model.popupMessages) != 3 || model.popupMessages[0].expanded {
@@ -287,6 +287,10 @@ func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 	if !model.popupMessages[2].expanded || strings.Contains(strings.Join(model.popupLines, "\n"), "Messages tab") {
 		t.Fatal("popup default expansion or stale tab text")
 	}
+	if model.popupMessage != 2 || model.popupOffset == 0 {
+		t.Fatalf("popup did not start at last message: selected=%d offset=%d", model.popupMessage, model.popupOffset)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyHome})
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.popupMessages[0].expanded {
 		t.Fatal("Enter did not expand selected message")
@@ -312,5 +316,16 @@ func TestPopupTabsMessageSelectionAndExpansion(t *testing.T) {
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	if !model.popupRaw {
 		t.Fatalf("raw view state: raw=%v", model.popupRaw)
+	}
+}
+
+func TestPopupWithResponseStaysAtTop(t *testing.T) {
+	raw := `{"data":{"request_body":{"messages":[{"role":"user","content":"hello"}]},"response_body":{"choices":[{"message":{"content":"answer"}}]}}}`
+	model := NewModel(nil)
+	model.width, model.height = 80, 8
+	model.logs = []gomodel.Request{{RawJSON: raw}}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if model.popupOffset != 0 || !popupHasResponse(raw) {
+		t.Fatalf("response popup position: offset=%d has_response=%v", model.popupOffset, popupHasResponse(raw))
 	}
 }
