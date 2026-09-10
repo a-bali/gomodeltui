@@ -18,28 +18,26 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	if len(buckets) > width {
 		buckets = buckets[len(buckets)-width:]
 	}
-	for len(buckets) < width {
-		buckets = append([]chart.Bucket{{}}, buckets...)
-	}
-	max := chart.MaxTotal(buckets)
+	maxTotal := chart.MaxTotal(buckets)
+	barWidth := max(1, width/len(buckets))
 	var lines []string
 	for row := height; row > 0; row-- {
 		var line strings.Builder
 		for _, bucket := range buckets {
-			total := bucket.Total()
-			green := bucket.Success * height / max
-			red := bucket.Errors * height / max
+			green := bucket.Success * height / maxTotal
+			red := bucket.Errors * height / maxTotal
 			filled := green + red
+			glyph := " "
 			if filled >= row {
 				if row <= red {
-					line.WriteString(errorStyle.Render("█"))
+					glyph = errorStyle.Render("█")
 				} else {
-					line.WriteString(successStyle.Render("█"))
+					glyph = successStyle.Render("█")
 				}
-			} else {
-				line.WriteByte(' ')
 			}
-			_ = total
+			for index := 0; index < barWidth; index++ {
+				line.WriteString(glyph)
+			}
 		}
 		lines = append(lines, line.String())
 	}

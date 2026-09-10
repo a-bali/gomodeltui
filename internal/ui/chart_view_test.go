@@ -17,3 +17,12 @@ func TestRenderChartScalesAndStacks(t *testing.T) {
 		t.Fatalf("expected 3 rows, got %d", lines)
 	}
 }
+
+func TestRenderChartChangesBarWidthWithZoom(t *testing.T) {
+	bucket := chart.Bucket{Success: 1}
+	short := renderChart([]chart.Bucket{bucket, bucket, bucket, bucket, bucket}, 50, 3)
+	long := renderChart(make([]chart.Bucket, 50), 50, 3)
+	if strings.Count(short, "█") <= strings.Count(long, "█") {
+		t.Fatal("short zoom should render wider bars")
+	}
+}
