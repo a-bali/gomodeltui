@@ -278,7 +278,7 @@ func (m Model) renderLogs(width int) string {
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
 		if start+len(out) == m.selected {
-			line = lipgloss.NewStyle().Reverse(true).Render(line)
+			line = selectionStyle.Render(line)
 		}
 		out = append(out, line)
 	}
@@ -312,9 +312,58 @@ func (m Model) renderPopup() string {
 	rows := popupRows(m.height)
 	start := min(m.popupOffset, max(0, len(m.popupLines)-rows))
 	end := min(len(m.popupLines), start+rows)
-	content := append([]string{"Request JSON  (Enter/Esc close  ↑↓/PgUp/PgDn scroll)"}, m.popupLines[start:end]...)
-	boxWidth := max(20, min(m.width-4, 140))
+	content := []string{"Request JSON  (Enter/Esc close  ↑↓/PgUp/PgDn scroll)"}
+	for _, line := range m.popupLines[start:end] {
+		content = append(content, highlightJSONLine(line))
+	}
+	boxWidth := max(20, m.width-2)
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Width(boxWidth).Render(strings.Join(content, "\n"))
+}
+
+func highlightJSONLine(line string) string {
+	var out strings.Builder
+	for index := 0; index < len(line); {
+		switch line[index] {
+		case ' ', '\t':
+			out.WriteByte(line[index])
+			index++
+		case '"':
+			end := index + 1
+			for end < len(line) {
+				if line[end] == '"' && line[end-1] != '\\' {
+					end++
+					break
+				}
+				end++
+			}
+			style := jsonStringStyle
+			lookahead := end
+			for lookahead < len(line) && (line[lookahead] == ' ' || line[lookahead] == '\t') {
+				lookahead++
+			}
+			if lookahead < len(line) && line[lookahead] == ':' {
+				style = jsonKeyStyle
+			}
+			out.WriteString(style.Render(line[index:end]))
+			index = end
+		case '{', '}', '[', ']', ':', ',':
+			out.WriteString(mutedStyle.Render(string(line[index])))
+			index++
+		default:
+			end := index
+			for end < len(line) && !strings.ContainsRune(" \t{}[]:,", rune(line[end])) {
+				end++
+			}
+			token := line[index:end]
+			style := jsonNumberStyle
+			if token == "true" || token == "false" || token == "null" {
+				style = jsonLiteralStyle
+			}
+			out.WriteString(style.Render(token))
+			index = end
+		}
+	}
+	return out.String()
 }
 
 func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {

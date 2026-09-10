@@ -11,6 +11,11 @@ var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 var failoverStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
 var mutedStyle = lipgloss.NewStyle().Faint(true)
+var selectionStyle = lipgloss.NewStyle().Background(lipgloss.Color("237"))
+var jsonKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+var jsonStringStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("114"))
+var jsonNumberStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+var jsonLiteralStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {

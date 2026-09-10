@@ -9,6 +9,7 @@ import (
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestCompletedAuditEventFeedsChart(t *testing.T) {
@@ -142,6 +143,12 @@ func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.popup || !strings.Contains(model.renderPopup(), "request_id") {
 		t.Fatal("popup did not open")
+	}
+	if got := lipgloss.Width(model.renderPopup()); got != model.width {
+		t.Fatalf("popup width=%d, want %d", got, model.width)
+	}
+	if got := highlightJSONLine(`  "ok": true, "count": 12`); !strings.Contains(got, "ok") || !strings.Contains(got, "true") || !strings.Contains(got, "12") {
+		t.Fatalf("highlighted JSON lost content: %q", got)
 	}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if model.popup {
