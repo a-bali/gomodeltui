@@ -86,3 +86,12 @@ func TestFiveMinuteWindowShortcut(t *testing.T) {
 		t.Fatalf("window=%v", model.window)
 	}
 }
+
+func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
+	if got := chartAreaHeight(30); got != 8 {
+		t.Fatalf("chart height=%d", got)
+	}
+	if got := visibleLogRows(30); got != 18 {
+		t.Fatalf("log rows=%d", got)
+	}
+}

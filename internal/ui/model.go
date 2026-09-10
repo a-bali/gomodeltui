@@ -178,13 +178,17 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return "Starting gomodeltui…"
 	}
-	chartHeight := max(4, m.height/2-3)
+	chartHeight := chartAreaHeight(m.height)
 	chartWidth := max(10, m.width-2)
-	status := "● connected"
+	status := "connected"
 	if !m.connected {
-		status = "○ disconnected: " + m.err
+		status = "disconnected: " + m.err
 	}
-	left := lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
+	dot := errorStyle.Render("●")
+	if m.connected {
+		dot = successStyle.Render("●")
+	}
+	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
 	keys := mutedStyle.Render("1-7 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit")
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
@@ -268,7 +272,8 @@ func statusStyle(status string) lipgloss.Style {
 	return errorStyle
 }
 
-func visibleLogRows(height int) int     { return max(1, height/2-4) }
+func chartAreaHeight(height int) int    { return max(4, height/3-2) }
+func visibleLogRows(height int) int     { return max(1, height-chartAreaHeight(height)-4) }
 func windowLabel(w chart.Window) string { return (time.Duration(w)).String() }
 func min(a, b int) int {
 	if a < b {
