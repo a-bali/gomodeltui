@@ -31,19 +31,22 @@ type Model struct {
 	logs          []gomodel.Request
 	logIndex      map[string]int
 	counted       map[string]bool
+	selected      int
+	following     bool
+	popup         bool
+	popupLines    []string
+	popupOffset   int
 	stream        io.ReadCloser
 	reader        *bufio.Reader
 	lastEventID   string
 	connected     bool
-	paused        bool
-	autoFollow    bool
 	logOffset     int
 	width, height int
 	err           string
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), autoFollow: true}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true}
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
@@ -77,6 +80,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
+		if m.popup {
+			switch msg.String() {
+			case "enter", "esc":
+				m.popup = false
+			case "up":
+				if m.popupOffset > 0 {
+					m.popupOffset--
+				}
+			case "down":
+				if m.popupOffset < max(0, len(m.popupLines)-popupRows(m.height)) {
+					m.popupOffset++
+				}
+			case "pgup", "pageup":
+				m.popupOffset = max(0, m.popupOffset-popupRows(m.height))
+			case "pgdown", "pagedown":
+				m.popupOffset = min(max(0, len(m.popupLines)-popupRows(m.height)), m.popupOffset+popupRows(m.height))
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			if m.stream != nil {
@@ -101,26 +123,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.window = chart.Window12h
 		case "7":
 			m.window = chart.Window24h
-		case "space":
-			m.paused = !m.paused
+		case "space", " ":
+			m.following = !m.following
+			if m.following {
+				m.selected = max(0, len(m.logs)-1)
+				m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+			}
 		case "c":
 			m.logs = nil
 			m.logIndex = make(map[string]int)
 			m.counted = make(map[string]bool)
+			m.selected = 0
 			m.logOffset = 0
 		case "up":
-			if m.logOffset > 0 {
-				m.logOffset--
-				m.autoFollow = false
-			}
+			m.moveSelection(-1)
 		case "down":
-			if m.logOffset < max(0, len(m.logs)-1) {
-				m.logOffset++
-				m.autoFollow = false
-			}
+			m.moveSelection(1)
+		case "pgup", "pageup":
+			m.moveSelection(-visibleLogRows(m.height))
+		case "pgdown", "pagedown":
+			m.moveSelection(visibleLogRows(m.height))
 		case "g":
-			m.autoFollow = true
+			m.following = true
+			m.selected = max(0, len(m.logs)-1)
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+		case "enter":
+			if len(m.logs) > 0 && m.selected < len(m.logs) {
+				m.popup = true
+				m.popupOffset = 0
+				m.popupLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
+			}
 		case "r":
 			if m.stream != nil {
 				_ = m.stream.Close()
@@ -135,7 +167,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.event.ID != "" {
 			m.lastEventID = msg.event.ID
 		}
-		if !m.paused {
+		{
 			if request, err := m.reducer.Apply(msg.event); err != nil {
 				m.err = err.Error()
 			} else if request != nil {
@@ -150,7 +182,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.counted[request.ID] = true
 				}
-				if m.autoFollow {
+				if m.following {
+					m.selected = max(0, len(m.logs)-1)
 					m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 				}
 			}
@@ -178,16 +211,16 @@ func (m Model) View() string {
 	}
 	chartHeight := chartAreaHeight(m.height)
 	chartWidth := max(10, m.width-2)
-	status := "connected"
-	if !m.connected {
-		status = "disconnected: " + m.err
-	}
 	dot := errorStyle.Render("●")
 	if m.connected {
 		dot = successStyle.Render("●")
 	}
-	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
-	keys := mutedStyle.Render("1-7 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit")
+	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + fmt.Sprintf("  window: %s", windowLabel(m.window))
+	followLabel := "follow:on"
+	if !m.following {
+		followLabel = "follow:off"
+	}
+	keys := mutedStyle.Render("1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  q quit")
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
 	chartText := renderChart(m.store.Snapshot(time.Now(), m.window), chartWidth, chartHeight)
@@ -199,7 +232,10 @@ func (m Model) View() string {
 	}
 	chartLegend := successStyle.Render("success") + fmt.Sprintf(" %d  ", success) + errorStyle.Render("errors") + fmt.Sprintf(" %d", errors)
 	logs := m.renderLogs(m.width)
-	return strings.Join([]string{header, chartLegend, chartText, "Live requests", logs}, "\n")
+	if m.popup {
+		return m.renderPopup()
+	}
+	return strings.Join([]string{header, chartLegend, chartText, logs}, "\n")
 }
 
 func (m Model) renderLogs(width int) string {
@@ -241,9 +277,44 @@ func (m Model) renderLogs(width int) string {
 			available := max(0, width-lipgloss.Width(prefix)-lipgloss.Width(separator))
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
+		if start+len(out) == m.selected {
+			line = lipgloss.NewStyle().Reverse(true).Render(line)
+		}
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func (m *Model) moveSelection(delta int) {
+	if len(m.logs) == 0 {
+		return
+	}
+	m.following = false
+	m.selected += delta
+	if m.selected < 0 {
+		m.selected = 0
+	}
+	if m.selected >= len(m.logs) {
+		m.selected = len(m.logs) - 1
+	}
+	rows := visibleLogRows(m.height)
+	if m.selected < m.logOffset {
+		m.logOffset = m.selected
+	}
+	if m.selected >= m.logOffset+rows {
+		m.logOffset = m.selected - rows + 1
+	}
+}
+
+func popupRows(height int) int { return max(3, height-6) }
+
+func (m Model) renderPopup() string {
+	rows := popupRows(m.height)
+	start := min(m.popupOffset, max(0, len(m.popupLines)-rows))
+	end := min(len(m.popupLines), start+rows)
+	content := append([]string{"Request JSON  (Enter/Esc close  ↑↓/PgUp/PgDn scroll)"}, m.popupLines[start:end]...)
+	boxWidth := max(20, min(m.width-4, 140))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Width(boxWidth).Render(strings.Join(content, "\n"))
 }
 
 func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {

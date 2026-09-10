@@ -1,6 +1,7 @@
 package gomodel
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -29,6 +30,7 @@ type Request struct {
 	Failover     bool
 	LastTurn     string
 	Attempts     []Attempt
+	RawJSON      string
 }
 
 type Attempt struct {
@@ -138,6 +140,9 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if request == nil {
 		request = &Request{ID: requestID}
 		r.requests[requestID] = request
+	}
+	if strings.HasPrefix(firstString(event.Event, payload.Type), "audit.") {
+		request.RawJSON = prettyJSON(event.Data)
 	}
 	if timestamp := parseTime(firstString(payload.Timestamp, fields["timestamp"])); !timestamp.IsZero() {
 		request.Timestamp = timestamp
@@ -274,6 +279,14 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func prettyJSON(raw []byte) string {
+	var formatted bytes.Buffer
+	if json.Indent(&formatted, raw, "", "  ") != nil {
+		return string(raw)
+	}
+	return formatted.String()
 }
 
 func lastTurn(value any) string {

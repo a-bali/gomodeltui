@@ -115,3 +115,36 @@ func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 		t.Fatalf("log rows=%d", got)
 	}
 }
+
+func TestFollowModeAndRequestNavigation(t *testing.T) {
+	model := NewModel(nil)
+	model.height = 12
+	model.logs = []gomodel.Request{{ID: "1"}, {ID: "2"}, {ID: "3"}}
+	model.following = true
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if model.following || model.selected != 1 {
+		t.Fatalf("navigation state: following=%v selected=%d", model.following, model.selected)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	if model.selected != 2 {
+		t.Fatalf("page selection=%d", model.selected)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if !model.following || model.selected != 2 {
+		t.Fatalf("follow state: following=%v selected=%d", model.following, model.selected)
+	}
+}
+
+func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{ID: "1", RawJSON: "{\n  \"request_id\": \"1\"\n}"}}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !model.popup || !strings.Contains(model.renderPopup(), "request_id") {
+		t.Fatal("popup did not open")
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if model.popup {
+		t.Fatal("popup did not dismiss")
+	}
+}
