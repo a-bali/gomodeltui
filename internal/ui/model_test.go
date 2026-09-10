@@ -208,6 +208,16 @@ func TestLogRowsAreCappedAndHaveScrollbar(t *testing.T) {
 	}
 }
 
+func TestLongErrorDoesNotOverlapLogScrollbar(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{Terminal: true, StatusCode: "500", Error: strings.Repeat("provider failure ", 20)}}
+	line := strings.Split(model.renderLogs(model.width), "\n")[0]
+	if got := lipgloss.Width(line); got != model.width {
+		t.Fatalf("rendered line width=%d, want %d", got, model.width)
+	}
+}
+
 func TestSearchCoversDisplayedFieldsAndRawJSON(t *testing.T) {
 	model := NewModel(nil)
 	model.width, model.height = 80, 12

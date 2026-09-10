@@ -13,6 +13,7 @@ import (
 	"github.com/balia/gomodeltui/internal/gomodel"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type eventMsg struct{ event gomodel.Event }
@@ -326,6 +327,7 @@ func (m Model) renderLogs(width int) string {
 			available := max(0, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(separator))
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
+		line = ansi.Truncate(line, contentWidth, "…")
 		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if start+len(out) == m.selected {
 			line = renderSelectedLine(line)
