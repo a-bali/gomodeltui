@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -145,6 +146,57 @@ func TestSelectedLogRowFillsTheLogWidth(t *testing.T) {
 	}
 	if selectionStyle.GetBackground() == nil {
 		t.Fatal("selection style has no background")
+	}
+}
+
+func TestPopupHomeAndEndScroll(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.popup = true
+	model.popupLines = make([]string, 30)
+	model.popupOffset = 4
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyHome})
+	if model.popupOffset != 0 {
+		t.Fatalf("home offset=%d", model.popupOffset)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	if model.popupOffset != len(model.popupLines)-popupRows(model.height) {
+		t.Fatalf("end offset=%d", model.popupOffset)
+	}
+}
+
+func TestLogRowsAreCappedAndHaveScrollbar(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	rows := make([]gomodel.Request, maxLogItems+20)
+	for index := range rows {
+		rows[index].ID = fmt.Sprintf("%d", index)
+	}
+	model.replaceRequestRows("new", rows)
+	model.selected = len(model.logs) - 1
+	model.logOffset = len(model.logs) - visibleLogRows(model.height)
+	if len(model.logs) != maxLogItems {
+		t.Fatalf("log count=%d, want %d", len(model.logs), maxLogItems)
+	}
+	thumbStart, thumbEnd := scrollbarThumb(10, maxLogItems+20, 1000)
+	if thumbEnd <= thumbStart {
+		t.Fatal("missing scrollbar thumb")
+	}
+	if !strings.Contains(model.renderLogs(model.width), "│") && !strings.Contains(model.renderLogs(model.width), "█") {
+		t.Fatal("missing log scrollbar")
+	}
+}
+
+func TestSearchCoversDisplayedFieldsAndRawJSON(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{ID: "1", ClientModel: "virtual-smart"}, {ID: "2", RawJSON: `{"function":"exec"}`}}
+	model.selected = 0
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e', 'x', 'e', 'c'}})
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if model.searching || model.selected != 1 {
+		t.Fatalf("search state: searching=%v selected=%d", model.searching, model.selected)
 	}
 }
 

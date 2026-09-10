@@ -23,6 +23,8 @@ type connectMsg struct {
 type errMsg struct{ err error }
 type tickMsg time.Time
 
+const maxLogItems = 1000
+
 type Model struct {
 	client        *gomodel.Client
 	reducer       *gomodel.Reducer
@@ -36,6 +38,8 @@ type Model struct {
 	popup         bool
 	popupLines    []string
 	popupOffset   int
+	searching     bool
+	searchQuery   string
 	stream        io.ReadCloser
 	reader        *bufio.Reader
 	lastEventID   string
@@ -96,6 +100,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.popupOffset = max(0, m.popupOffset-popupRows(m.height))
 			case "pgdown", "pagedown":
 				m.popupOffset = min(max(0, len(m.popupLines)-popupRows(m.height)), m.popupOffset+popupRows(m.height))
+			case "home", "ctrl+home":
+				m.popupOffset = 0
+			case "end", "ctrl+end":
+				m.popupOffset = max(0, len(m.popupLines)-popupRows(m.height))
+			}
+			return m, nil
+		}
+		if m.searching {
+			switch msg.String() {
+			case "enter":
+				m.searching = false
+				m.findNextMatch()
+			case "esc":
+				m.searching = false
+			case "backspace", "ctrl+h":
+				if len(m.searchQuery) > 0 {
+					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+				}
+			case "ctrl+c":
+				m.searching = false
+			default:
+				if msg.Type == tea.KeyRunes {
+					m.searchQuery += string(msg.Runes)
+				}
 			}
 			return m, nil
 		}
@@ -147,6 +175,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.following = true
 			m.selected = max(0, len(m.logs)-1)
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+		case "/":
+			m.searching = true
+			m.following = false
+		case "n":
+			if m.searchQuery != "" {
+				m.findNextMatch()
+			}
 		case "enter":
 			if len(m.logs) > 0 && m.selected < len(m.logs) {
 				m.popup = true
@@ -220,7 +255,11 @@ func (m Model) View() string {
 	if !m.following {
 		followLabel = "follow:off"
 	}
-	keys := mutedStyle.Render("1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  q quit")
+	keysText := "1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  n next  q quit"
+	if m.searching {
+		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
+	}
+	keys := mutedStyle.Render(keysText)
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
 	buckets := m.store.Snapshot(time.Now(), m.window, chartWidth)
@@ -242,8 +281,10 @@ func (m Model) renderLogs(width int) string {
 	rows := visibleLogRows(m.height)
 	start := min(m.logOffset, max(0, len(m.logs)-rows))
 	end := min(len(m.logs), start+rows)
+	contentWidth := max(1, width-2)
+	thumbStart, thumbEnd := scrollbarThumb(rows, len(m.logs), start)
 	var out []string
-	for _, request := range m.logs[start:end] {
+	for index, request := range m.logs[start:end] {
 		icon := successStyle.Render("✓")
 		if request.Terminal && !request.Success {
 			icon = errorStyle.Render("✗")
@@ -274,15 +315,37 @@ func (m Model) renderLogs(width int) string {
 		line := prefix
 		if request.LastTurn != "" {
 			separator := mutedStyle.Render("  ")
-			available := max(0, width-lipgloss.Width(prefix)-lipgloss.Width(separator))
+			available := max(0, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(separator))
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
+		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if start+len(out) == m.selected {
-			line = selectionStyle.Width(width).Render(line)
+			line = selectionStyle.Render(line)
 		}
+		line += " " + scrollbarCell(index, thumbStart, thumbEnd)
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func scrollbarThumb(rows, total, offset int) (int, int) {
+	if rows <= 0 || total <= rows {
+		return 0, rows
+	}
+	thumbSize := max(1, rows*rows/total)
+	track := rows - thumbSize
+	position := 0
+	if total > rows {
+		position = offset * track / (total - rows)
+	}
+	return position, position + thumbSize
+}
+
+func scrollbarCell(row, thumbStart, thumbEnd int) string {
+	if row >= thumbStart && row < thumbEnd {
+		return mutedStyle.Render("█")
+	}
+	return mutedStyle.Render("│")
 }
 
 func (m *Model) moveSelection(delta int) {
@@ -383,12 +446,46 @@ func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {
 	}
 	filtered = append(filtered[:start], append(rows, filtered[start:]...)...)
 	m.logs = filtered
+	if excess := len(m.logs) - maxLogItems; excess > 0 {
+		m.logs = m.logs[excess:]
+		m.selected = max(0, m.selected-excess)
+		m.logOffset = max(0, m.logOffset-excess)
+	}
 	m.logIndex = make(map[string]int)
 	for index, row := range m.logs {
 		if !strings.Contains(row.ID, "/attempt-") {
 			m.logIndex[row.ID] = index
 		}
 	}
+}
+
+func (m *Model) findNextMatch() {
+	if len(m.logs) == 0 || m.searchQuery == "" {
+		return
+	}
+	query := strings.ToLower(m.searchQuery)
+	for step := 1; step <= len(m.logs); step++ {
+		index := (m.selected + step) % len(m.logs)
+		if strings.Contains(strings.ToLower(requestSearchText(m.logs[index])), query) {
+			m.selected = index
+			m.following = false
+			rows := visibleLogRows(m.height)
+			if m.selected < m.logOffset {
+				m.logOffset = m.selected
+			} else if m.selected >= m.logOffset+rows {
+				m.logOffset = m.selected - rows + 1
+			}
+			return
+		}
+	}
+}
+
+func requestSearchText(request gomodel.Request) string {
+	return strings.Join([]string{
+		request.UserPath, request.SessionID, request.ClientModel, request.RoutedModel,
+		request.Model, request.Provider, request.StatusCode, request.Error, request.LastTurn,
+		request.RawJSON,
+	}, " ")
 }
 
 func userPathStyle(path string) lipgloss.Style {
