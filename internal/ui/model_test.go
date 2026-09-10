@@ -163,6 +163,27 @@ func TestPopupHomeAndEndScroll(t *testing.T) {
 	if model.popupOffset != len(model.popupLines)-popupRows(model.height) {
 		t.Fatalf("end offset=%d", model.popupOffset)
 	}
+	popup := model.renderPopup()
+	if strings.Contains(popup, "╭") || !strings.Contains(popup, "│") && !strings.Contains(popup, "█") {
+		t.Fatalf("popup frame/scrollbar layout is wrong: %q", popup)
+	}
+}
+
+func TestLogHomeAndEndNavigation(t *testing.T) {
+	model := NewModel(nil)
+	model.height = 12
+	model.logs = []gomodel.Request{{ID: "1"}, {ID: "2"}, {ID: "3"}}
+	model.selected = 1
+	model.logOffset = 1
+	model.following = true
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyHome})
+	if model.following || model.selected != 0 || model.logOffset != 0 {
+		t.Fatalf("home state: following=%v selected=%d offset=%d", model.following, model.selected, model.logOffset)
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	if model.following || model.selected != 2 {
+		t.Fatalf("end state: following=%v selected=%d", model.following, model.selected)
+	}
 }
 
 func TestLogRowsAreCappedAndHaveScrollbar(t *testing.T) {

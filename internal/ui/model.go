@@ -171,6 +171,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveSelection(-visibleLogRows(m.height))
 		case "pgdown", "pagedown":
 			m.moveSelection(visibleLogRows(m.height))
+		case "home":
+			m.following = false
+			m.selected = 0
+			m.logOffset = 0
+		case "end":
+			m.following = false
+			m.selected = max(0, len(m.logs)-1)
+			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 		case "g":
 			m.following = true
 			m.selected = max(0, len(m.logs)-1)
@@ -378,18 +386,21 @@ func (m *Model) moveSelection(delta int) {
 	}
 }
 
-func popupRows(height int) int { return max(3, height-6) }
+func popupRows(height int) int { return max(1, height-1) }
 
 func (m Model) renderPopup() string {
 	rows := popupRows(m.height)
 	start := min(m.popupOffset, max(0, len(m.popupLines)-rows))
 	end := min(len(m.popupLines), start+rows)
-	content := []string{"Request JSON  (Enter/Esc close  ↑↓/PgUp/PgDn scroll)"}
+	thumbStart, thumbEnd := scrollbarThumb(rows, len(m.popupLines), start)
+	content := []string{truncateText("Request JSON  (Enter/Esc close  Home/End  ↑↓/PgUp/PgDn scroll)", max(1, m.width))}
 	for _, line := range m.popupLines[start:end] {
-		content = append(content, highlightJSONLine(line))
+		line = highlightJSONLine(line)
+		line += strings.Repeat(" ", max(0, m.width-2-lipgloss.Width(line)))
+		line += " " + scrollbarCell(len(content)-1, thumbStart, thumbEnd)
+		content = append(content, line)
 	}
-	boxWidth := max(20, m.width-2)
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Width(boxWidth).Render(strings.Join(content, "\n"))
+	return strings.Join(content, "\n")
 }
 
 func highlightJSONLine(line string) string {
