@@ -12,13 +12,29 @@ func TestCanonicalModelRemovesProviderPrefix(t *testing.T) {
 	}
 }
 
+func TestSuccessfulFailoverIsNotAnError(t *testing.T) {
+	r := NewReducer()
+	started := Event{Event: "audit.updated", Data: json.RawMessage(`{"request_id":"req-failover","type":"audit.updated","data":{"error_type":"upstream_timeout","data":{"attempts":[{"provider":"openai"},{"provider":"anthropic"}]}}}`)}
+	completed := Event{Event: "audit.completed", Data: json.RawMessage(`{"request_id":"req-failover","type":"audit.completed","data":{"status_code":200,"data":{"attempts":[{"provider":"openai"},{"provider":"anthropic"}]}}}`)}
+	if _, err := r.Apply(started); err != nil {
+		t.Fatal(err)
+	}
+	request, err := r.Apply(completed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !request.Success || request.Error != "" || !request.Failover {
+		t.Fatalf("unexpected failover result: %+v", request)
+	}
+}
+
 func TestReducerCollapsesLifecycle(t *testing.T) {
 	r := NewReducer()
-	for _, raw := range []string{
-		`{"seq":1,"request_id":"req-1","type":"audit.started","timestamp":"2026-09-10T12:00:00Z","data":{"requested_model":"gpt-4o","provider":"openai","user_path":"/team/a","session_id":"session-xyz"}}`,
-		`{"seq":2,"request_id":"req-1","type":"audit.completed","timestamp":"2026-09-10T12:00:01Z","data":{"status_code":200,"duration_ns":120000000,"input_tokens":12,"output_tokens":8,"data":{"request_body":{"messages":[{"role":"user","content":"hello from the latest prompt"}]}}}}`,
+	for _, item := range []struct{ eventType, raw string }{
+		{"audit.started", `{"seq":1,"request_id":"req-1","type":"audit.started","timestamp":"2026-09-10T12:00:00Z","data":{"requested_model":"gpt-4o","provider":"openai","user_path":"/team/a","session_id":"session-xyz"}}`},
+		{"audit.completed", `{"seq":2,"request_id":"req-1","type":"audit.completed","timestamp":"2026-09-10T12:00:01Z","data":{"status_code":200,"duration_ns":120000000,"input_tokens":12,"output_tokens":8,"data":{"request_body":{"messages":[{"role":"user","content":"hello from the latest prompt"}]}}}}`},
 	} {
-		event := Event{Event: "audit.completed", Data: json.RawMessage(raw)}
+		event := Event{Event: item.eventType, Data: json.RawMessage(item.raw)}
 		request, err := r.Apply(event)
 		if err != nil {
 			t.Fatal(err)

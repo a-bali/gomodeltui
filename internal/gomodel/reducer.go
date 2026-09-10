@@ -26,6 +26,7 @@ type Request struct {
 	Duration     time.Duration
 	Terminal     bool
 	Success      bool
+	Failover     bool
 	LastTurn     string
 }
 
@@ -116,11 +117,19 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if value := lastTurn(fields["data"]); value != "" {
 		request.LastTurn = value
 	}
+	if auditData, ok := fields["data"].(map[string]any); ok {
+		if attempts, ok := auditData["attempts"].([]any); ok && len(attempts) > 1 {
+			request.Failover = true
+		}
+	}
 
 	eventType := firstString(event.Event, payload.Type)
 	if strings.HasPrefix(eventType, "audit.") && (strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed")) {
 		request.Terminal = true
-		request.Success = request.Error == "" && !isErrorStatus(request.StatusCode)
+		request.Success = isSuccessStatus(request.StatusCode)
+		if request.Success {
+			request.Error = ""
+		}
 	}
 	copy := *request
 	return &copy, nil
@@ -257,4 +266,9 @@ func isErrorStatus(status string) bool {
 		return code >= 400
 	}
 	return false
+}
+
+func isSuccessStatus(status string) bool {
+	code, err := strconv.Atoi(status)
+	return err == nil && code >= 200 && code < 300
 }

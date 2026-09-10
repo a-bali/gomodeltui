@@ -213,6 +213,8 @@ func (m Model) renderLogs(width int) string {
 		icon := successStyle.Render("✓")
 		if request.Terminal && !request.Success {
 			icon = errorStyle.Render("✗")
+		} else if request.Terminal && request.Failover {
+			icon = failoverStyle.Render("✓")
 		}
 		timestamp := request.Timestamp.Format("15:04:05")
 		if request.Timestamp.IsZero() {
