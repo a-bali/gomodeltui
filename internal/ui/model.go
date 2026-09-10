@@ -278,7 +278,7 @@ func (m Model) renderLogs(width int) string {
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
 		}
 		if start+len(out) == m.selected {
-			line = selectionStyle.Render(line)
+			line = selectionStyle.Width(width).Render(line)
 		}
 		out = append(out, line)
 	}

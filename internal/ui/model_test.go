@@ -136,6 +136,18 @@ func TestFollowModeAndRequestNavigation(t *testing.T) {
 	}
 }
 
+func TestSelectedLogRowFillsTheLogWidth(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{ID: "1", ClientModel: "virtual-smart", RoutedModel: "provider/model", StatusCode: "200", Terminal: true, Success: true}}
+	if got := lipgloss.Width(model.renderLogs(80)); got != 80 {
+		t.Fatalf("selected row width=%d, want 80", got)
+	}
+	if selectionStyle.GetBackground() == nil {
+		t.Fatal("selection style has no background")
+	}
+}
+
 func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 	model := NewModel(nil)
 	model.width, model.height = 80, 12
