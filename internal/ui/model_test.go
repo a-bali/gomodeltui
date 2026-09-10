@@ -41,3 +41,21 @@ func TestAuditCompletedEventCountsEvenWhenReducerTerminalFlagIsAbsent(t *testing
 		t.Fatalf("expected explicit completed event to count: %+v", buckets[len(buckets)-1])
 	}
 }
+
+func TestRequestRowFormatAndStableUserPathColor(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 160, 30
+	model.logs = []gomodel.Request{{Timestamp: time.Date(2026, 9, 10, 12, 42, 6, 0, time.UTC), UserPath: "/team/a", ClientModel: "virtual-smart", RoutedModel: "opencode-go/xiaomi/mimo-v2.5", InputTokens: 123123, CacheRatio: .97, OutputTokens: 3211, StatusCode: "200", Duration: 234200000, Terminal: true, Success: true}}
+	got := model.renderLogs(model.width)
+	for _, want := range []string{"12:42:06", "/team/a", "virtual-smart", "opencode-go/xiaomi/mimo-v2.5", "i:123123", "o:3211", "c:97%", "200", "234.2ms"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("row %q missing %q", got, want)
+		}
+	}
+	if userPathStyle("/team/a").GetForeground() != userPathStyle("/team/a").GetForeground() {
+		t.Fatal("user path color is not stable")
+	}
+	if userPathStyle("/team/a").GetForeground() == userPathStyle("/team/b").GetForeground() {
+		t.Fatal("expected distinct user path colors")
+	}
+}

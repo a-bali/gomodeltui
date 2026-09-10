@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"strings"
 	"time"
@@ -181,7 +182,10 @@ func (m Model) View() string {
 	if !m.connected {
 		status = "○ disconnected: " + m.err
 	}
-	header := lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
+	left := lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
+	keys := mutedStyle.Render("1-6 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit")
+	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
+	header := left + gap + keys
 	chartText := renderChart(m.store.Snapshot(time.Now(), m.window), chartWidth, chartHeight)
 	buckets := m.store.Snapshot(time.Now(), m.window)
 	var success, errors int
@@ -191,8 +195,7 @@ func (m Model) View() string {
 	}
 	chartLegend := successStyle.Render("success") + fmt.Sprintf(" %d  ", success) + errorStyle.Render("errors") + fmt.Sprintf(" %d", errors)
 	logs := m.renderLogs(m.width)
-	footer := "1-6 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit"
-	return strings.Join([]string{header, chartLegend, chartText, "Live requests", logs, footer}, "\n")
+	return strings.Join([]string{header, chartLegend, chartText, "Live requests", logs}, "\n")
 }
 
 func (m Model) renderLogs(width int) string {
@@ -201,7 +204,7 @@ func (m Model) renderLogs(width int) string {
 	end := min(len(m.logs), start+rows)
 	var out []string
 	for _, request := range m.logs[start:end] {
-		icon := lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("✓")
+		icon := successStyle.Render("✓")
 		if request.Terminal && !request.Success {
 			icon = errorStyle.Render("✗")
 		}
@@ -211,9 +214,10 @@ func (m Model) renderLogs(width int) string {
 		}
 		responseTime := "-"
 		if request.Duration > 0 {
-			responseTime = fmt.Sprintf("%dms", request.Duration/time.Millisecond)
+			responseTime = fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
 		}
-		line := fmt.Sprintf("%s %s client:%-16s route:%-36s in:%d cache:%3.0f%% out:%d code:%s rt:%s", icon, timestamp, request.ClientModel, request.RoutedModel, request.InputTokens, request.CacheRatio*100, request.OutputTokens, request.StatusCode, responseTime)
+		arrow := mutedStyle.Render(" -> ")
+		line := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + arrow + request.ClientModel + arrow + request.RoutedModel + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + fmt.Sprintf("%s", responseTime) + mutedStyle.Render("ms")
 		if request.Error != "" {
 			line += " " + request.Error
 		}
@@ -223,6 +227,20 @@ func (m Model) renderLogs(width int) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func userPathStyle(path string) lipgloss.Style {
+	colors := []string{"39", "75", "99", "141", "171", "178", "208", "35", "44", "64"}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(path))
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colors[hash.Sum32()%uint32(len(colors))]))
+}
+
+func statusStyle(status string) lipgloss.Style {
+	if len(status) == 3 && status[0] == '2' {
+		return successStyle
+	}
+	return errorStyle
 }
 
 func visibleLogRows(height int) int     { return max(1, height/2-4) }

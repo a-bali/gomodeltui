@@ -9,6 +9,7 @@ import (
 
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+var mutedStyle = lipgloss.NewStyle().Faint(true)
 
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
