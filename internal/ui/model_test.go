@@ -82,6 +82,23 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	}
 }
 
+func TestFailoverExpandsToFailedAndFailoverRows(t *testing.T) {
+	request := gomodel.Request{ID: "req-1", ClientModel: "virtual-smart", Terminal: true, Success: true, Attempts: []gomodel.Attempt{{Seq: 1, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 2, ProviderName: "anthropic", Model: "claude-sonnet", StatusCode: 200, Success: true}}}
+	rows := request.LogRows()
+	if len(rows) != 2 || rows[0].Success || rows[0].StatusCode != "503" || !rows[1].Success || !rows[1].Failover {
+		t.Fatalf("unexpected rows: %+v", rows)
+	}
+	if rows[1].RoutedModel != "anthropic/claude-sonnet" {
+		t.Fatalf("route=%q", rows[1].RoutedModel)
+	}
+	model := NewModel(nil)
+	model.width, model.height = 160, 30
+	model.logs = rows
+	if !strings.Contains(model.renderLogs(model.width), "(failover)") {
+		t.Fatal("missing failover marker")
+	}
+}
+
 func TestFiveMinuteWindowShortcut(t *testing.T) {
 	model := NewModel(nil)
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})

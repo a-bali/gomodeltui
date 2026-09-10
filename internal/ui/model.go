@@ -139,11 +139,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if request, err := m.reducer.Apply(msg.event); err != nil {
 				m.err = err.Error()
 			} else if request != nil {
+				rows := request.LogRows()
 				if index, ok := m.logIndex[request.ID]; ok {
-					m.logs[index] = *request
+					m.logs = append(m.logs[:index], append(rows, m.logs[index+1:]...)...)
+					m.reindexLogs(request.ID, index, len(rows))
 				} else {
-					m.logIndex[request.ID] = len(m.logs)
-					m.logs = append(m.logs, *request)
+					m.logIndex[request.ID] = len(m.logs) + len(rows) - 1
+					m.logs = append(m.logs, rows...)
 				}
 				terminalEvent := msg.event.Event == "audit.completed" || msg.event.Event == "audit.failed"
 				if (request.Terminal || terminalEvent) && !m.counted[request.ID] {
@@ -229,7 +231,11 @@ func (m Model) renderLogs(width int) string {
 		if len(request.SessionID) > 0 {
 			session = sessionStyle(request.SessionID).Render("sid:" + request.SessionID[max(0, len(request.SessionID)-3):])
 		}
-		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + request.RoutedModel + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTime + mutedStyle.Render("ms")
+		route := request.RoutedModel
+		if request.Failover {
+			route += " (failover)"
+		}
+		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + route + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTime + mutedStyle.Render("ms")
 		if request.Error != "" {
 			prefix += " " + request.Error
 		}
@@ -242,6 +248,27 @@ func (m Model) renderLogs(width int) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func (m *Model) reindexLogs(logicalID string, start, rowCount int) {
+	for id, index := range m.logIndex {
+		if index >= start {
+			delete(m.logIndex, id)
+		}
+	}
+	if rowCount > 0 {
+		m.logIndex[logicalID] = start + rowCount - 1
+	}
+	for index, row := range m.logs {
+		if row.ID != logicalID && strings.Contains(row.ID, logicalID+"/attempt-") {
+			continue
+		}
+		if index >= start+rowCount {
+			if _, ok := m.logIndex[row.ID]; !ok {
+				m.logIndex[row.ID] = index
+			}
+		}
+	}
 }
 
 func userPathStyle(path string) lipgloss.Style {

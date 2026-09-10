@@ -28,6 +28,62 @@ type Request struct {
 	Success      bool
 	Failover     bool
 	LastTurn     string
+	Attempts     []Attempt
+}
+
+type Attempt struct {
+	Seq          int
+	ProviderType string
+	ProviderName string
+	Model        string
+	StatusCode   int
+	Success      bool
+	ErrorType    string
+	ErrorCode    string
+	ErrorMessage string
+	StartedAt    time.Time
+	Duration     time.Duration
+}
+
+func (r Request) LogRows() []Request {
+	if !r.Terminal || len(r.Attempts) <= 1 {
+		return []Request{r}
+	}
+	rows := make([]Request, 0, len(r.Attempts))
+	for index, attempt := range r.Attempts {
+		provider := attempt.ProviderName
+		if provider == "" {
+			provider = attempt.ProviderType
+		}
+		status := ""
+		if attempt.StatusCode != 0 {
+			status = strconv.Itoa(attempt.StatusCode)
+		}
+		errorText := firstNonEmpty(attempt.ErrorMessage, attempt.ErrorCode, attempt.ErrorType)
+		row := r
+		row.ID = fmt.Sprintf("%s/attempt-%d", r.ID, attempt.Seq)
+		row.Timestamp = attempt.StartedAt
+		if row.Timestamp.IsZero() {
+			row.Timestamp = r.Timestamp
+		}
+		row.Provider = provider
+		row.Model = canonicalModel(attempt.Model, provider)
+		row.RoutedModel = routedModel(attempt.Model, provider)
+		row.StatusCode = status
+		row.Error = errorText
+		row.Duration = attempt.Duration
+		row.Success = attempt.Success
+		row.Failover = index > 0
+		row.LastTurn = ""
+		rows = append(rows, row)
+	}
+	// Usage and prompt details belong on the final routed response row.
+	rows[len(rows)-1].ID = r.ID
+	rows[len(rows)-1].InputTokens = r.InputTokens
+	rows[len(rows)-1].CacheRatio = r.CacheRatio
+	rows[len(rows)-1].OutputTokens = r.OutputTokens
+	rows[len(rows)-1].LastTurn = r.LastTurn
+	return rows
 }
 
 func (r Request) TimestampOrNow() time.Time {
@@ -120,6 +176,7 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if auditData, ok := fields["data"].(map[string]any); ok {
 		if attempts, ok := auditData["attempts"].([]any); ok && len(attempts) > 1 {
 			request.Failover = true
+			request.Attempts = parseAttempts(attempts)
 		}
 	}
 
@@ -171,6 +228,40 @@ func firstFloat(value any) (float64, bool) {
 		return number, err == nil
 	}
 	return 0, false
+}
+
+func parseAttempts(values []any) []Attempt {
+	attempts := make([]Attempt, 0, len(values))
+	for _, value := range values {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		attempts = append(attempts, Attempt{
+			Seq: intValue(item["seq"]), ProviderType: firstString(item["provider_type"]), ProviderName: firstString(item["provider_name"]), Model: firstString(item["model"]), StatusCode: intValue(item["status_code"]), Success: boolValue(item["success"]), ErrorType: firstString(item["error_type"]), ErrorCode: firstString(item["error_code"]), ErrorMessage: firstString(item["error_message"]), StartedAt: parseTime(firstString(item["started_at"])), Duration: parseDuration(item["duration_ns"]),
+		})
+	}
+	return attempts
+}
+
+func intValue(value any) int {
+	if number, ok := value.(float64); ok {
+		return int(number)
+	}
+	if text, ok := value.(string); ok {
+		number, _ := strconv.Atoi(text)
+		return number
+	}
+	return 0
+}
+func boolValue(value any) bool { result, _ := value.(bool); return result }
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func lastTurn(value any) string {

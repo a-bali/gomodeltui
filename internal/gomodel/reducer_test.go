@@ -26,6 +26,9 @@ func TestSuccessfulFailoverIsNotAnError(t *testing.T) {
 	if !request.Success || request.Error != "" || !request.Failover {
 		t.Fatalf("unexpected failover result: %+v", request)
 	}
+	if len(request.Attempts) != 2 {
+		t.Fatalf("attempts=%+v", request.Attempts)
+	}
 }
 
 func TestReducerCollapsesLifecycle(t *testing.T) {
