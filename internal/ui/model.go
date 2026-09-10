@@ -144,7 +144,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				terminalEvent := msg.event.Event == "audit.completed" || msg.event.Event == "audit.failed"
 				if (request.Terminal || terminalEvent) && !m.counted[request.ID] {
-					m.store.Add(request.TimestampOrNow(), request.Success)
+					// Chart windows represent when the TUI observed the completed request.
+					// The request timestamp is retained for the log and may lag local time.
+					m.store.Add(time.Now(), request.Success)
 					m.counted[request.ID] = true
 				}
 				if m.autoFollow {
