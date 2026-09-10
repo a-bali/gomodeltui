@@ -245,6 +245,15 @@ func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 	if got := highlightJSONLine(`  "ok": true, "count": 12`); !strings.Contains(got, "ok") || !strings.Contains(got, "true") || !strings.Contains(got, "12") {
 		t.Fatalf("highlighted JSON lost content: %q", got)
 	}
+	model.popupLines = []string{`{"long_prompt":"` + strings.Repeat("word ", 30) + `"}`}
+	wrapped := model.popupContentLines()
+	if len(wrapped) < 2 {
+		t.Fatal("popup JSON was not wrapped")
+	}
+	original := model.popupLines[0]
+	if got := strings.Join(wrapped, ""); got != original {
+		t.Fatalf("wrapping changed JSON content: got %q, want %q", got, original)
+	}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if model.popup {
 		t.Fatal("popup did not dismiss")

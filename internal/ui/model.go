@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
@@ -94,17 +95,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.popupOffset--
 				}
 			case "down":
-				if m.popupOffset < max(0, len(m.popupLines)-popupRows(m.height)) {
+				if m.popupOffset < max(0, len(m.popupContentLines())-popupRows(m.height)) {
 					m.popupOffset++
 				}
 			case "pgup", "pageup":
 				m.popupOffset = max(0, m.popupOffset-popupRows(m.height))
 			case "pgdown", "pagedown":
-				m.popupOffset = min(max(0, len(m.popupLines)-popupRows(m.height)), m.popupOffset+popupRows(m.height))
+				m.popupOffset = min(max(0, len(m.popupContentLines())-popupRows(m.height)), m.popupOffset+popupRows(m.height))
 			case "home", "ctrl+home":
 				m.popupOffset = 0
 			case "end", "ctrl+end":
-				m.popupOffset = max(0, len(m.popupLines)-popupRows(m.height))
+				m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
 			}
 			return m, nil
 		}
@@ -391,18 +392,59 @@ func (m *Model) moveSelection(delta int) {
 func popupRows(height int) int { return max(1, height-1) }
 
 func (m Model) renderPopup() string {
+	lines := m.popupContentLines()
 	rows := popupRows(m.height)
-	start := min(m.popupOffset, max(0, len(m.popupLines)-rows))
-	end := min(len(m.popupLines), start+rows)
-	thumbStart, thumbEnd := scrollbarThumb(rows, len(m.popupLines), start)
+	start := min(m.popupOffset, max(0, len(lines)-rows))
+	end := min(len(lines), start+rows)
+	thumbStart, thumbEnd := scrollbarThumb(rows, len(lines), start)
 	content := []string{truncateText("Request JSON  (Enter/Esc close  Home/End  ↑↓/PgUp/PgDn scroll)", max(1, m.width))}
-	for _, line := range m.popupLines[start:end] {
+	for _, line := range lines[start:end] {
 		line = highlightJSONLine(line)
 		line += strings.Repeat(" ", max(0, m.width-2-lipgloss.Width(line)))
 		line += " " + scrollbarCell(len(content)-1, thumbStart, thumbEnd)
 		content = append(content, line)
 	}
 	return strings.Join(content, "\n")
+}
+
+func (m Model) popupContentLines() []string {
+	return wrapJSONLines(m.popupLines, max(1, m.width-2))
+}
+
+func wrapJSONLines(lines []string, width int) []string {
+	var wrapped []string
+	for _, line := range lines {
+		wrapped = append(wrapped, wrapJSONLine(line, width)...)
+	}
+	return wrapped
+}
+
+func wrapJSONLine(line string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	runes := []rune(line)
+	if len(runes) <= width {
+		return []string{line}
+	}
+	var wrapped []string
+	for len(runes) > width {
+		cut := width
+		for index := width; index > 0; index-- {
+			if unicode.IsSpace(runes[index-1]) {
+				cut = index
+				break
+			}
+		}
+		if cut == 0 {
+			cut = width
+		}
+		part := string(runes[:cut])
+		wrapped = append(wrapped, part)
+		runes = runes[cut:]
+	}
+	wrapped = append(wrapped, string(runes))
+	return wrapped
 }
 
 func highlightJSONLine(line string) string {
