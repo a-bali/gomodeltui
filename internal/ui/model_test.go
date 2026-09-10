@@ -61,6 +61,24 @@ func TestRequestRowFormatAndStableUserPathColor(t *testing.T) {
 	}
 }
 
+func TestRequestRowSessionAndLastTurn(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 160, 30
+	model.logs = []gomodel.Request{{Timestamp: time.Date(2026, 9, 10, 12, 42, 6, 0, time.UTC), UserPath: "/team/a", SessionID: "session-xyz", ClientModel: "virtual-smart", RoutedModel: "opencode-go/xiaomi/mimo-v2.5", StatusCode: "200", Duration: 234200000, LastTurn: "hello from the latest prompt", Terminal: true, Success: true}}
+	row := model.renderLogs(model.width)
+	for _, want := range []string{"sid:xyz", "hello from the latest prompt"} {
+		if !strings.Contains(row, want) {
+			t.Fatalf("row %q missing %q", row, want)
+		}
+	}
+	if sessionStyle("session-xyz").GetForeground() != sessionStyle("session-xyz").GetForeground() {
+		t.Fatal("session color is not stable")
+	}
+	if got := truncateText("abcdefgh", 5); got != "abcd…" {
+		t.Fatalf("truncated=%q", got)
+	}
+}
+
 func TestFiveMinuteWindowShortcut(t *testing.T) {
 	model := NewModel(nil)
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})

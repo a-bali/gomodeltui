@@ -219,12 +219,19 @@ func (m Model) renderLogs(width int) string {
 			responseTime = fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
 		}
 		arrow := mutedStyle.Render(" -> ")
-		line := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + arrow + request.ClientModel + arrow + request.RoutedModel + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + fmt.Sprintf("%s", responseTime) + mutedStyle.Render("ms")
-		if request.Error != "" {
-			line += " " + request.Error
+		session := ""
+		if len(request.SessionID) > 0 {
+			session = sessionStyle(request.SessionID).Render("sid:" + request.SessionID[max(0, len(request.SessionID)-3):])
 		}
-		if len(line) > width {
-			line = line[:max(0, width)]
+		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + request.RoutedModel + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTime + mutedStyle.Render("ms")
+		if request.Error != "" {
+			prefix += " " + request.Error
+		}
+		line := prefix
+		if request.LastTurn != "" {
+			separator := mutedStyle.Render("  ")
+			available := max(0, width-lipgloss.Width(prefix)-lipgloss.Width(separator))
+			line = prefix + separator + mutedStyle.Render(truncateText(request.LastTurn, available))
 		}
 		out = append(out, line)
 	}
@@ -236,6 +243,22 @@ func userPathStyle(path string) lipgloss.Style {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(path))
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(colors[hash.Sum32()%uint32(len(colors))]))
+}
+
+func sessionStyle(id string) lipgloss.Style { return userPathStyle("session:" + id) }
+
+func truncateText(text string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= width {
+		return text
+	}
+	if width <= 1 {
+		return string(runes[:width])
+	}
+	return string(runes[:width-1]) + "…"
 }
 
 func statusStyle(status string) lipgloss.Style {

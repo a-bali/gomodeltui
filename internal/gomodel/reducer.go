@@ -12,6 +12,7 @@ type Request struct {
 	ID           string
 	Timestamp    time.Time
 	UserPath     string
+	SessionID    string
 	ClientModel  string
 	RoutedModel  string
 	Model        string
@@ -25,6 +26,7 @@ type Request struct {
 	Duration     time.Duration
 	Terminal     bool
 	Success      bool
+	LastTurn     string
 }
 
 func (r Request) TimestampOrNow() time.Time {
@@ -74,6 +76,9 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if value := firstString(fields["user_path"]); value != "" {
 		request.UserPath = value
 	}
+	if value := firstString(fields["session_id"]); value != "" {
+		request.SessionID = value
+	}
 	if value := firstString(fields["provider_name"], fields["provider"]); value != "" {
 		request.Provider = value
 	}
@@ -107,6 +112,9 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	}
 	if value := parseDuration(fields["duration_ns"], fields["duration_ms"]); value > 0 {
 		request.Duration = value
+	}
+	if value := lastTurn(fields["data"]); value != "" {
+		request.LastTurn = value
 	}
 
 	eventType := firstString(event.Event, payload.Type)
@@ -154,6 +162,62 @@ func firstFloat(value any) (float64, bool) {
 		return number, err == nil
 	}
 	return 0, false
+}
+
+func lastTurn(value any) string {
+	auditData, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	body, ok := auditData["request_body"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	messages, ok := body["messages"].([]any)
+	if !ok || len(messages) == 0 {
+		return ""
+	}
+	last, ok := messages[len(messages)-1].(map[string]any)
+	if !ok {
+		return ""
+	}
+	content := last["content"]
+	if text, ok := content.(string); ok {
+		if function := jsonFunction(text); function != "" {
+			return function
+		}
+		return text
+	}
+	if function := jsonFunctionValue(content); function != "" {
+		return function
+	}
+	return ""
+}
+
+func jsonFunction(text string) string {
+	var value any
+	if json.Unmarshal([]byte(strings.TrimSpace(text)), &value) != nil {
+		return ""
+	}
+	return jsonFunctionValue(value)
+}
+
+func jsonFunctionValue(value any) string {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, key := range []string{"function", "name", "tool_name"} {
+		if name, ok := object[key].(string); ok && name != "" {
+			return name
+		}
+	}
+	if function, ok := object["function"].(map[string]any); ok {
+		if name, ok := function["name"].(string); ok {
+			return name
+		}
+	}
+	return ""
 }
 
 func firstString(values ...any) string {

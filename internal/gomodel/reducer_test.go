@@ -15,8 +15,8 @@ func TestCanonicalModelRemovesProviderPrefix(t *testing.T) {
 func TestReducerCollapsesLifecycle(t *testing.T) {
 	r := NewReducer()
 	for _, raw := range []string{
-		`{"seq":1,"request_id":"req-1","type":"audit.started","timestamp":"2026-09-10T12:00:00Z","data":{"requested_model":"gpt-4o","provider":"openai","user_path":"/team/a"}}`,
-		`{"seq":2,"request_id":"req-1","type":"audit.completed","timestamp":"2026-09-10T12:00:01Z","data":{"status_code":200,"duration_ns":120000000,"input_tokens":12,"output_tokens":8}}`,
+		`{"seq":1,"request_id":"req-1","type":"audit.started","timestamp":"2026-09-10T12:00:00Z","data":{"requested_model":"gpt-4o","provider":"openai","user_path":"/team/a","session_id":"session-xyz"}}`,
+		`{"seq":2,"request_id":"req-1","type":"audit.completed","timestamp":"2026-09-10T12:00:01Z","data":{"status_code":200,"duration_ns":120000000,"input_tokens":12,"output_tokens":8,"data":{"request_body":{"messages":[{"role":"user","content":"hello from the latest prompt"}]}}}}`,
 	} {
 		event := Event{Event: "audit.completed", Data: json.RawMessage(raw)}
 		request, err := r.Apply(event)
@@ -39,6 +39,9 @@ func TestReducerCollapsesLifecycle(t *testing.T) {
 	}
 	if request.ClientModel != "gpt-4o" || request.RoutedModel != "openai/gpt-4o" {
 		t.Fatalf("unexpected model routing: %+v", request)
+	}
+	if request.SessionID != "session-xyz" || request.LastTurn != "hello from the latest prompt" {
+		t.Fatalf("unexpected session/turn: %+v", request)
 	}
 	if request.InputTokens != 12 || request.OutputTokens != 8 || request.Duration != 120*time.Millisecond {
 		t.Fatalf("unexpected token counts: %+v", request)
