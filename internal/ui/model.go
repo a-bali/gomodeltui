@@ -223,8 +223,8 @@ func (m Model) View() string {
 	keys := mutedStyle.Render("1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  q quit")
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
-	chartText := renderChart(m.store.Snapshot(time.Now(), m.window), chartWidth, chartHeight)
-	buckets := m.store.Snapshot(time.Now(), m.window)
+	buckets := m.store.Snapshot(time.Now(), m.window, chartWidth)
+	chartText := renderChart(buckets, chartWidth, chartHeight)
 	var success, errors int
 	for _, bucket := range buckets {
 		success += bucket.Success

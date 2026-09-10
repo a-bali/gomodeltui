@@ -28,30 +28,52 @@ type Bucket struct {
 func (b Bucket) Total() int { return b.Success + b.Errors }
 
 type Store struct {
-	buckets map[time.Time]Bucket
+	events []event
 }
 
-func NewStore() *Store { return &Store{buckets: make(map[time.Time]Bucket)} }
+type event struct {
+	at      time.Time
+	success bool
+}
+
+func NewStore() *Store { return &Store{} }
 
 func (s *Store) Add(at time.Time, success bool) {
-	start := at.Truncate(time.Minute)
-	bucket := s.buckets[start]
-	bucket.Start = start
-	if success {
-		bucket.Success++
-	} else {
-		bucket.Errors++
-	}
-	s.buckets[start] = bucket
+	s.events = append(s.events, event{at: at, success: success})
 }
 
-func (s *Store) Snapshot(now time.Time, window Window) []Bucket {
-	end := now.Truncate(time.Minute)
-	start := end.Add(-time.Duration(window) + time.Minute)
-	result := make([]Bucket, 0, int(time.Duration(window)/time.Minute))
-	for at := start; !at.After(end); at = at.Add(time.Minute) {
-		result = append(result, s.buckets[at])
-		result[len(result)-1].Start = at
+// Snapshot returns exactly columns time buckets when columns is provided.
+// With no column count it retains the historical one-minute resolution.
+func (s *Store) Snapshot(now time.Time, window Window, columns ...int) []Bucket {
+	width := int(time.Duration(window) / time.Minute)
+	start := now.Truncate(time.Minute).Add(-time.Duration(window) + time.Minute)
+	end := now.Truncate(time.Minute).Add(time.Minute - time.Nanosecond)
+	if len(columns) > 0 && columns[0] > 0 {
+		width = columns[0]
+		start = now.Add(-time.Duration(window))
+		end = now
+	}
+	if width < 1 {
+		width = 1
+	}
+	duration := time.Duration(window) / time.Duration(width)
+	result := make([]Bucket, width)
+	for index := range result {
+		result[index].Start = start.Add(time.Duration(index) * duration)
+	}
+	for _, event := range s.events {
+		if event.at.Before(start) || event.at.After(end) {
+			continue
+		}
+		index := int(event.at.Sub(start) / duration)
+		if index >= width {
+			index = width - 1
+		}
+		if event.success {
+			result[index].Success++
+		} else {
+			result[index].Errors++
+		}
 	}
 	return result
 }

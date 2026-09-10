@@ -6,7 +6,7 @@ import (
 )
 
 func TestStoreSnapshotZeroFillsAndAggregates(t *testing.T) {
-	now := time.Date(2026, 9, 10, 12, 5, 42, 0, time.UTC)
+	now := time.Date(2026, 9, 10, 12, 5, 42, 0, time.UTC).Truncate(time.Minute)
 	store := NewStore()
 	store.Add(now.Add(-2*time.Minute), true)
 	store.Add(now.Add(-2*time.Minute), false)
@@ -19,6 +19,20 @@ func TestStoreSnapshotZeroFillsAndAggregates(t *testing.T) {
 	}
 	if buckets[0].Total() != 0 || buckets[14].Total() != 0 {
 		t.Fatal("expected zero-filled edges")
+	}
+}
+
+func TestStoreSnapshotUsesRequestedColumnWidth(t *testing.T) {
+	now := time.Date(2026, 9, 10, 12, 5, 42, 0, time.UTC)
+	store := NewStore()
+	store.Add(now.Add(-4*time.Minute-59*time.Second), true)
+	store.Add(now.Add(-2*time.Minute-30*time.Second), false)
+	buckets := store.Snapshot(now, Window5m, 100)
+	if len(buckets) != 100 {
+		t.Fatalf("got %d buckets", len(buckets))
+	}
+	if buckets[0].Success != 1 || buckets[50].Errors != 1 {
+		t.Fatalf("unexpected dynamic buckets: first=%+v middle=%+v", buckets[0], buckets[50])
 	}
 }
 
