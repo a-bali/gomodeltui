@@ -142,7 +142,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.logIndex[request.ID] = len(m.logs)
 					m.logs = append(m.logs, *request)
 				}
-				if request.Terminal && !m.counted[request.ID] {
+				terminalEvent := msg.event.Event == "audit.completed" || msg.event.Event == "audit.failed"
+				if (request.Terminal || terminalEvent) && !m.counted[request.ID] {
 					m.store.Add(request.TimestampOrNow(), request.Success)
 					m.counted[request.ID] = true
 				}
@@ -180,9 +181,16 @@ func (m Model) View() string {
 	}
 	header := lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + "  " + status + fmt.Sprintf("  window: %s", windowLabel(m.window))
 	chartText := renderChart(m.store.Snapshot(time.Now(), m.window), chartWidth, chartHeight)
+	buckets := m.store.Snapshot(time.Now(), m.window)
+	var success, errors int
+	for _, bucket := range buckets {
+		success += bucket.Success
+		errors += bucket.Errors
+	}
+	chartLegend := successStyle.Render("success") + fmt.Sprintf(" %d  ", success) + errorStyle.Render("errors") + fmt.Sprintf(" %d", errors)
 	logs := m.renderLogs(m.width)
 	footer := "1-6 window  +/- zoom  space pause  ↑↓ scroll  g follow  c clear  r reconnect  q quit"
-	return strings.Join([]string{header, chartText, "Live requests", logs, footer}, "\n")
+	return strings.Join([]string{header, chartLegend, chartText, "Live requests", logs, footer}, "\n")
 }
 
 func (m Model) renderLogs(width int) string {

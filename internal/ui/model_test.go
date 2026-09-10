@@ -25,3 +25,14 @@ func TestCompletedAuditEventFeedsChart(t *testing.T) {
 		t.Fatalf("unexpected model routing: %+v", model.logs[0])
 	}
 }
+
+func TestAuditCompletedEventCountsEvenWhenReducerTerminalFlagIsAbsent(t *testing.T) {
+	at := time.Now().UTC().Truncate(time.Minute)
+	model := NewModel(nil)
+	event := gomodel.Event{Event: "audit.completed", Data: json.RawMessage(`{"request_id":"req-2","type":"audit.updated","timestamp":"` + at.Format(time.RFC3339) + `","data":{"status_code":200}}`)}
+	_, _ = model.Update(eventMsg{event: event})
+	buckets := model.store.Snapshot(at, chart.Window15m)
+	if buckets[len(buckets)-1].Success != 1 {
+		t.Fatalf("expected explicit completed event to count: %+v", buckets[len(buckets)-1])
+	}
+}

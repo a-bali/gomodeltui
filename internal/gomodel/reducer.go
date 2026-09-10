@@ -109,7 +109,7 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 		request.Duration = value
 	}
 
-	eventType := firstString(payload.Type, event.Event)
+	eventType := firstString(event.Event, payload.Type)
 	if strings.HasPrefix(eventType, "audit.") && (strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed")) {
 		request.Terminal = true
 		request.Success = request.Error == "" && !isErrorStatus(request.StatusCode)
