@@ -39,6 +39,8 @@ type Model struct {
 	following     bool
 	popup         bool
 	popupLines    []string
+	popupRawLines []string
+	popupRaw      bool
 	popupOffset   int
 	searching     bool
 	searchQuery   string
@@ -90,6 +92,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "enter", "esc":
 				m.popup = false
+			case "r":
+				m.popupRaw = !m.popupRaw
+				m.popupOffset = 0
 			case "up":
 				if m.popupOffset > 0 {
 					m.popupOffset--
@@ -196,7 +201,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.logs) > 0 && m.selected < len(m.logs) {
 				m.popup = true
 				m.popupOffset = 0
-				m.popupLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
+				m.popupRaw = false
+				m.popupRawLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
+				m.popupLines = buildPopupLines(m.logs[m.selected].RawJSON)
 			}
 		case "r":
 			if m.stream != nil {
@@ -397,9 +404,15 @@ func (m Model) renderPopup() string {
 	start := min(m.popupOffset, max(0, len(lines)-rows))
 	end := min(len(lines), start+rows)
 	thumbStart, thumbEnd := scrollbarThumb(rows, len(lines), start)
-	content := []string{truncateText("Request JSON  (Enter/Esc close  Home/End  ↑↓/PgUp/PgDn scroll)", max(1, m.width))}
+	header := "Request inspector  (Enter/Esc close  r raw JSON  Home/End  ↑↓/PgUp/PgDn scroll)"
+	if m.popupRaw {
+		header = "Raw JSON  (Enter/Esc close  r inspector  Home/End  ↑↓/PgUp/PgDn scroll)"
+	}
+	content := []string{truncateText(header, max(1, m.width))}
 	for _, line := range lines[start:end] {
-		line = highlightJSONLine(line)
+		if m.popupRaw {
+			line = highlightJSONLine(line)
+		}
 		line += strings.Repeat(" ", max(0, m.width-2-lipgloss.Width(line)))
 		line += " " + scrollbarCell(len(content)-1, thumbStart, thumbEnd)
 		content = append(content, line)
@@ -408,7 +421,11 @@ func (m Model) renderPopup() string {
 }
 
 func (m Model) popupContentLines() []string {
-	return wrapJSONLines(m.popupLines, max(1, m.width-2))
+	lines := m.popupLines
+	if m.popupRaw && len(m.popupRawLines) > 0 {
+		lines = m.popupRawLines
+	}
+	return wrapJSONLines(lines, max(1, m.width-2))
 }
 
 func wrapJSONLines(lines []string, width int) []string {

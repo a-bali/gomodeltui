@@ -259,3 +259,14 @@ func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 		t.Fatal("popup did not dismiss")
 	}
 }
+
+func TestPopupInspectorExtractsMessagesAndToolCalls(t *testing.T) {
+	raw := `{"request_id":"req-1","data":{"requested_model":"virtual-smart","request_body":{"messages":[{"role":"system","content":"rules"},{"role":"assistant","tool_calls":[{"function":{"name":"exec","arguments":"{\"cmd\":\"pwd\"}"}}]}]}}}`
+	lines := buildPopupLines(raw)
+	got := strings.Join(lines, "\n")
+	for _, want := range []string{"REQUEST", "MESSAGES (2)", "[1] system", "[2] assistant", "tool call: exec", "args:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("inspector missing %q in %q", want, got)
+		}
+	}
+}
