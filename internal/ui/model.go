@@ -37,6 +37,7 @@ type Model struct {
 	counted       map[string]bool
 	selected      int
 	following     bool
+	followPulse   uint8
 	popup         bool
 	popupLines    []string
 	popupRawLines []string
@@ -199,6 +200,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "space", " ":
 			m.following = !m.following
 			if m.following {
+				m.followPulse = 0
 				m.selected = max(0, len(m.logs)-1)
 				m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 			}
@@ -226,6 +228,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 		case "g":
 			m.following = true
+			m.followPulse = 0
 			m.selected = max(0, len(m.logs)-1)
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 		case "/":
@@ -301,6 +304,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, refreshCmd()
 	case tickMsg:
+		if m.following {
+			m.followPulse = (m.followPulse + 1) % 3
+		}
 		if m.connected {
 			return m, refreshCmd()
 		}
@@ -343,7 +349,11 @@ func (m Model) View() string {
 	if m.popup {
 		return m.renderPopup()
 	}
-	return strings.Join([]string{header, chartLegend, chartText, logs}, "\n")
+	footer := ""
+	if m.following {
+		footer = mutedStyle.Render("following" + strings.Repeat(".", int(m.followPulse)+1))
+	}
+	return strings.Join([]string{header, chartLegend, chartText, logs, footer}, "\n")
 }
 
 func (m Model) renderLogs(width int) string {
@@ -734,7 +744,7 @@ func statusStyle(status string) lipgloss.Style {
 }
 
 func chartAreaHeight(height int) int    { return max(4, height/3-2) }
-func visibleLogRows(height int) int     { return max(1, height-chartAreaHeight(height)-4) }
+func visibleLogRows(height int) int     { return max(1, height-chartAreaHeight(height)-5) }
 func windowLabel(w chart.Window) string { return (time.Duration(w)).String() }
 func min(a, b int) int {
 	if a < b {

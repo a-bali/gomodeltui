@@ -113,8 +113,31 @@ func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)
 	}
-	if got := visibleLogRows(30); got != 18 {
-		t.Fatalf("log rows=%d", got)
+	if got := visibleLogRows(30); got != 17 {
+		t.Fatalf("log rows=%d, want 17 with follow footer", got)
+	}
+}
+
+func TestFollowFooterPulsesOnRefresh(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 80, 12
+	first := model.View()
+	_, _ = model.Update(tickMsg(time.Now()))
+	second := model.View()
+	_, _ = model.Update(tickMsg(time.Now()))
+	third := model.View()
+	for _, view := range []string{first, second, third} {
+		if !strings.Contains(view, "following") {
+			t.Fatalf("follow footer missing:\n%s", view)
+		}
+	}
+	if first == second || second == third {
+		t.Fatalf("follow footer did not pulse")
+	}
+
+	model.following = false
+	if strings.Contains(model.View(), "following") {
+		t.Fatal("follow footer shown while follow mode is off")
 	}
 }
 
