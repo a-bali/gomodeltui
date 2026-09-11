@@ -127,7 +127,7 @@ func TestFollowFooterPulsesOnRefresh(t *testing.T) {
 	_, _ = model.Update(tickMsg(time.Now()))
 	third := model.View()
 	for _, view := range []string{first, second, third} {
-		if !strings.Contains(view, "following") {
+		if !strings.Contains(view, ".") {
 			t.Fatalf("follow footer missing:\n%s", view)
 		}
 	}
@@ -136,7 +136,7 @@ func TestFollowFooterPulsesOnRefresh(t *testing.T) {
 	}
 
 	model.following = false
-	if strings.Contains(model.View(), "following") {
+	if strings.HasSuffix(model.View(), ".") {
 		t.Fatal("follow footer shown while follow mode is off")
 	}
 }

@@ -351,7 +351,7 @@ func (m Model) View() string {
 	}
 	footer := ""
 	if m.following {
-		footer = mutedStyle.Render("following" + strings.Repeat(".", int(m.followPulse)+1))
+		footer = mutedStyle.Render(strings.Repeat(".", int(m.followPulse)+1))
 	}
 	return strings.Join([]string{header, chartLegend, chartText, logs, footer}, "\n")
 }
