@@ -200,7 +200,10 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	eventType := firstString(event.Event, payload.Type)
 	if strings.HasPrefix(eventType, "audit.") && (strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed")) {
 		request.Terminal = true
-		request.Success = isSuccessStatus(request.StatusCode)
+		// A stream can establish an HTTP 200 response and fail later while
+		// reading or delivering SSE data. In that case the status remains 200,
+		// but the audit error is still a failed request.
+		request.Success = isSuccessStatus(request.StatusCode) && !(strings.HasSuffix(eventType, ".failed") && request.Error != "")
 		if request.Success {
 			request.Error = ""
 		}

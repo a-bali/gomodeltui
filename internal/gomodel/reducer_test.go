@@ -31,6 +31,21 @@ func TestSuccessfulFailoverIsNotAnError(t *testing.T) {
 	}
 }
 
+func TestStreamErrorWithHTTP200IsAnError(t *testing.T) {
+	reducer := NewReducer()
+	event := Event{Event: "audit.failed", Data: json.RawMessage(`{"request_id":"req-stream","type":"audit.failed","data":{"status_code":200,"error_type":"stream_error"}}`)}
+	request, err := reducer.Apply(event)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if request == nil || request.Success {
+		t.Fatalf("request = %+v, want unsuccessful request", request)
+	}
+	if request.Error != "stream_error" {
+		t.Fatalf("error = %q, want stream_error", request.Error)
+	}
+}
+
 func TestReducerCollapsesLifecycle(t *testing.T) {
 	r := NewReducer()
 	for _, item := range []struct{ eventType, raw string }{
