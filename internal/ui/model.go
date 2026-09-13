@@ -29,34 +29,36 @@ type tickMsg time.Time
 const maxLogItems = 1000
 
 type Model struct {
-	client        *gomodel.Client
-	reducer       *gomodel.Reducer
-	store         *chart.Store
-	latencyStore  *latency.Store
-	window        chart.Window
-	logs          []gomodel.Request
-	logIndex      map[string]int
-	counted       map[string]bool
-	selected      int
-	following     bool
-	followPulse   uint8
-	popup         bool
-	popupLines    []string
-	popupRawLines []string
-	popupRaw      bool
-	popupMessages []popupMessage
-	popupMessage  int
-	popupAll      bool
-	popupOffset   int
-	searching     bool
-	searchQuery   string
-	stream        io.ReadCloser
-	reader        *bufio.Reader
-	lastEventID   string
-	connected     bool
-	logOffset     int
-	width, height int
-	err           string
+	client          *gomodel.Client
+	reducer         *gomodel.Reducer
+	store           *chart.Store
+	latencyStore    *latency.Store
+	window          chart.Window
+	logs            []gomodel.Request
+	logIndex        map[string]int
+	counted         map[string]bool
+	selected        int
+	following       bool
+	followPulse     uint8
+	latencyScreen   bool
+	latencySelected int
+	popup           bool
+	popupLines      []string
+	popupRawLines   []string
+	popupRaw        bool
+	popupMessages   []popupMessage
+	popupMessage    int
+	popupAll        bool
+	popupOffset     int
+	searching       bool
+	searchQuery     string
+	stream          io.ReadCloser
+	reader          *bufio.Reader
+	lastEventID     string
+	connected       bool
+	logOffset       int
+	width, height   int
+	err             string
 }
 
 func NewModel(client *gomodel.Client) *Model {
@@ -155,6 +157,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.latencyScreen {
+			switch msg.String() {
+			case "l", "esc":
+				m.latencyScreen = false
+			case "up":
+				m.latencySelected = max(0, m.latencySelected-1)
+			case "down":
+				m.latencySelected = min(max(0, len(m.latencyStore.Summaries())-1), m.latencySelected+1)
+			case "home":
+				m.latencySelected = 0
+			case "end":
+				m.latencySelected = max(0, len(m.latencyStore.Summaries())-1)
+			}
+			return m, nil
+		}
 		if m.searching {
 			switch msg.String() {
 			case "enter":
@@ -181,6 +198,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_ = m.stream.Close()
 			}
 			return m, tea.Quit
+		case "l":
+			m.latencyScreen = true
+			m.latencySelected = 0
+			return m, nil
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
 		case "-":
@@ -338,6 +359,9 @@ func requestLatencySamples(rows []gomodel.Request) []latency.Sample {
 func (m Model) View() string {
 	if m.width == 0 {
 		return "Starting gomodeltui…"
+	}
+	if m.latencyScreen {
+		return m.renderLatencyScreen()
 	}
 	chartHeight := chartAreaHeight(m.height)
 	chartWidth := max(10, m.width-2)
