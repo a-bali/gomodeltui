@@ -18,6 +18,8 @@ type Summary struct {
 	Key             string
 	Attempts        int
 	LogicalRequests int
+	Success         int
+	Errors          int
 	Durations       []time.Duration
 }
 
@@ -56,6 +58,11 @@ func (s *Store) Summaries() []Summary {
 			byKey[sample.Key] = summary
 		}
 		summary.Attempts++
+		if sample.Success {
+			summary.Success++
+		} else {
+			summary.Errors++
+		}
 		summary.Durations = append(summary.Durations, sample.Duration)
 	}
 	result := make([]Summary, 0, len(byKey))

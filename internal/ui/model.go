@@ -42,6 +42,7 @@ type Model struct {
 	followPulse     uint8
 	latencyScreen   bool
 	latencySelected int
+	latencyOffset   int
 	popup           bool
 	popupLines      []string
 	popupRawLines   []string
@@ -158,18 +159,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.latencyScreen {
+			summaries := m.latencyStore.Summaries()
 			switch msg.String() {
 			case "l", "esc":
 				m.latencyScreen = false
 			case "up":
 				m.latencySelected = max(0, m.latencySelected-1)
 			case "down":
-				m.latencySelected = min(max(0, len(m.latencyStore.Summaries())-1), m.latencySelected+1)
+				m.latencySelected = min(max(0, len(summaries)-1), m.latencySelected+1)
 			case "home":
 				m.latencySelected = 0
 			case "end":
-				m.latencySelected = max(0, len(m.latencyStore.Summaries())-1)
+				m.latencySelected = max(0, len(summaries)-1)
+			case "pgup", "pageup":
+				m.latencySelected = max(0, m.latencySelected-latencyListRows(m.height))
+			case "pgdown", "pagedown":
+				m.latencySelected = min(max(0, len(summaries)-1), m.latencySelected+latencyListRows(m.height))
 			}
+			m.latencyOffset = latencyListOffset(m.latencySelected, m.latencyOffset, len(summaries), m.height)
 			return m, nil
 		}
 		if m.searching {
@@ -201,6 +208,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "l":
 			m.latencyScreen = true
 			m.latencySelected = 0
+			m.latencyOffset = 0
 			return m, nil
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
@@ -374,7 +382,7 @@ func (m Model) View() string {
 	if !m.following {
 		followLabel = "follow:off"
 	}
-	keysText := "1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  n next  q quit"
+	keysText := "1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  n next  q quit"
 	if m.searching {
 		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
 	}
