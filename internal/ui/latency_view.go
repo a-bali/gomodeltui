@@ -39,8 +39,12 @@ func (m Model) renderLatencyScreen() string {
 
 	selectedSummary := summaries[selected]
 	bottomHeight := max(3, m.height-latencyTopRows(m.height)-1)
-	labels := latencyBucketLabels(latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets), latencyHistogramBuckets)
-	histogram := renderCenteredLatencyHistogram(m.latencyStore.Histogram(selectedSummary.Key, latencyHistogramBuckets), labels, m.width, bottomHeight)
+	scaleMax := m.latencyScaleMax
+	if scaleMax <= 0 {
+		scaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+	}
+	labels := latencyBucketLabels(scaleMax, latencyHistogramBuckets)
+	histogram := renderCenteredLatencyHistogram(m.latencyStore.HistogramWithMax(selectedSummary.Key, latencyHistogramBuckets, scaleMax), labels, m.width, bottomHeight)
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
 }
 

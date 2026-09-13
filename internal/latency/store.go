@@ -81,15 +81,15 @@ func (s *Store) Summaries() []Summary {
 }
 
 func (s *Store) Histogram(key string, buckets int) []int {
+	return s.HistogramWithMax(key, buckets, RoundedMaxDuration(s.MaxDuration(), buckets))
+}
+
+func (s *Store) HistogramWithMax(key string, buckets int, roundedMax time.Duration) []int {
 	if buckets < 1 {
 		buckets = 1
 	}
 	var durations []time.Duration
-	var globalMax time.Duration
 	for _, sample := range s.samples {
-		if sample.Duration > globalMax {
-			globalMax = sample.Duration
-		}
 		if sample.Key == key && sample.Duration > 0 {
 			durations = append(durations, sample.Duration)
 		}
@@ -98,7 +98,9 @@ func (s *Store) Histogram(key string, buckets int) []int {
 	if len(durations) == 0 {
 		return result
 	}
-	roundedMax := RoundedMaxDuration(globalMax, buckets)
+	if roundedMax <= 0 {
+		return result
+	}
 	bucketWidth := roundedMax / time.Duration(buckets)
 	for _, duration := range durations {
 		index := int(duration / bucketWidth)

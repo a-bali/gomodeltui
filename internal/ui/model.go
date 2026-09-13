@@ -43,6 +43,8 @@ type Model struct {
 	latencyScreen   bool
 	latencySelected int
 	latencyOffset   int
+	latencyScaleMax time.Duration
+	latencyScaleAt  time.Time
 	popup           bool
 	popupLines      []string
 	popupRawLines   []string
@@ -209,6 +211,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencyScreen = true
 			m.latencySelected = 0
 			m.latencyOffset = 0
+			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+			m.latencyScaleAt = time.Now()
 			return m, nil
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
@@ -338,6 +342,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, refreshCmd()
 	case tickMsg:
+		if m.latencyScreen && (m.latencyScaleAt.IsZero() || time.Since(m.latencyScaleAt) >= time.Minute) {
+			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+			m.latencyScaleAt = time.Now()
+		}
 		if m.following {
 			m.followPulse = (m.followPulse + 1) % 3
 		}

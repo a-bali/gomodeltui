@@ -57,3 +57,13 @@ func TestRoundedMaxDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestHistogramWithMaxUsesProvidedSharedScale(t *testing.T) {
+	store := NewStore()
+	store.AddRequest([]Sample{{Key: "a/m", Duration: time.Second}})
+	store.AddRequest([]Sample{{Key: "b/m", Duration: 8 * time.Second}})
+	got := store.HistogramWithMax("a/m", 10, 10*time.Second)
+	if got[1] != 1 {
+		t.Fatalf("histogram=%v, expected 1s sample in the second bucket", got)
+	}
+}
