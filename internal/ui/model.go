@@ -12,6 +12,7 @@ import (
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/balia/gomodeltui/internal/latency"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -31,6 +32,7 @@ type Model struct {
 	client        *gomodel.Client
 	reducer       *gomodel.Reducer
 	store         *chart.Store
+	latencyStore  *latency.Store
 	window        chart.Window
 	logs          []gomodel.Request
 	logIndex      map[string]int
@@ -58,7 +60,7 @@ type Model struct {
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true}
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
@@ -208,6 +210,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.logs = nil
 			m.logIndex = make(map[string]int)
 			m.counted = make(map[string]bool)
+			m.store = chart.NewStore()
+			m.latencyStore = latency.NewStore()
 			m.selected = 0
 			m.logOffset = 0
 		case "up":
@@ -287,6 +291,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					for _, row := range rows {
 						m.store.Add(time.Now(), row.Success)
 					}
+					m.latencyStore.AddRequest(requestLatencySamples(rows))
 					m.counted[request.ID] = true
 				}
 				if m.following {
@@ -313,6 +318,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd())
 	}
 	return m, nil
+}
+
+func requestLatencySamples(rows []gomodel.Request) []latency.Sample {
+	samples := make([]latency.Sample, 0, len(rows))
+	for _, row := range rows {
+		samples = append(samples, latency.Sample{
+			Key:          row.RoutedModel,
+			At:           row.TimestampOrNow(),
+			Duration:     row.Duration,
+			Success:      row.Success,
+			InputTokens:  row.InputTokens,
+			OutputTokens: row.OutputTokens,
+		})
+	}
+	return samples
 }
 
 func (m Model) View() string {
