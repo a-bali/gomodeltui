@@ -39,7 +39,7 @@ func (m Model) renderLatencyScreen() string {
 
 	selectedSummary := summaries[selected]
 	bottomHeight := max(3, m.height-latencyTopRows(m.height)-1)
-	labels := latencyBucketLabels(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+	labels := latencyBucketLabels(latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets), latencyHistogramBuckets)
 	histogram := renderCenteredLatencyHistogram(m.latencyStore.Histogram(selectedSummary.Key, latencyHistogramBuckets), labels, m.width, bottomHeight)
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
 }
@@ -68,7 +68,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 	for _, count := range buckets {
 		maxCount = max(maxCount, count)
 	}
-	barHeight := max(1, height-2)
+	barHeight := min(12, max(1, height-2))
 	var lines []string
 	for row := barHeight; row > 0; row-- {
 		var line strings.Builder
@@ -106,9 +106,16 @@ func latencyBucketLabels(maxDuration time.Duration, buckets int) []string {
 	}
 	for index := range labels {
 		upper := maxDuration * time.Duration(index+1) / time.Duration(buckets)
-		labels[index] = formatLatency(upper)
+		labels[index] = formatBucketDuration(upper)
 	}
 	return labels
+}
+
+func formatBucketDuration(duration time.Duration) string {
+	if duration >= time.Second {
+		return fmt.Sprintf("%.0fs", duration.Seconds())
+	}
+	return fmt.Sprintf("%.0fms", float64(duration)/float64(time.Millisecond))
 }
 
 func centerLine(line string, width int) string {

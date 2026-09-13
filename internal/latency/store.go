@@ -98,7 +98,8 @@ func (s *Store) Histogram(key string, buckets int) []int {
 	if len(durations) == 0 {
 		return result
 	}
-	bucketWidth := (globalMax + time.Duration(buckets) - 1) / time.Duration(buckets)
+	roundedMax := RoundedMaxDuration(globalMax, buckets)
+	bucketWidth := roundedMax / time.Duration(buckets)
 	for _, duration := range durations {
 		index := int(duration / bucketWidth)
 		if index >= buckets {
@@ -107,6 +108,25 @@ func (s *Store) Histogram(key string, buckets int) []int {
 		result[index]++
 	}
 	return result
+}
+
+func RoundedMaxDuration(maxDuration time.Duration, buckets int) time.Duration {
+	if maxDuration <= 0 || buckets < 1 {
+		return 0
+	}
+	unit := time.Second
+	for maxDuration >= unit*10 {
+		unit *= 10
+	}
+	normalized := float64(maxDuration) / float64(unit)
+	multiplier := 1.0
+	for _, candidate := range []float64{1, 2, 5, 10} {
+		if normalized <= candidate {
+			multiplier = candidate
+			break
+		}
+	}
+	return time.Duration(multiplier * float64(unit))
 }
 
 func (s *Store) MaxDuration() time.Duration {

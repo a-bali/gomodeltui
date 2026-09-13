@@ -22,8 +22,8 @@ func TestHistogramAndPercentile(t *testing.T) {
 	store := NewStore()
 	store.AddRequest([]Sample{{Key: "a/m", Duration: time.Second}, {Key: "a/m", Duration: 2 * time.Second}, {Key: "a/m", Duration: 4 * time.Second}})
 	store.AddRequest([]Sample{{Key: "b/m", Duration: 8 * time.Second, Success: true}})
-	histogram := store.Histogram("a/m", 4)
-	if histogram[0] != 1 || histogram[1] != 1 || histogram[3] != 0 || histogram[2] != 1 {
+	histogram := store.Histogram("a/m", 10)
+	if histogram[1] != 1 || histogram[2] != 1 || histogram[4] != 1 {
 		t.Fatalf("histogram=%v", histogram)
 	}
 	if got := store.MaxDuration(); got != 8*time.Second {
@@ -40,5 +40,20 @@ func TestHistogramAndPercentile(t *testing.T) {
 	summary := store.Summaries()[0]
 	if got := Percentile(summary.Durations, 50); got != 2*time.Second {
 		t.Fatalf("p50=%s", got)
+	}
+}
+
+func TestRoundedMaxDuration(t *testing.T) {
+	for _, test := range []struct {
+		input time.Duration
+		want  time.Duration
+	}{
+		{time.Duration(90130) * time.Millisecond, 100 * time.Second},
+		{2384 * time.Millisecond, 5 * time.Second},
+		{120 * time.Millisecond, time.Second},
+	} {
+		if got := RoundedMaxDuration(test.input, 10); got != test.want {
+			t.Fatalf("RoundedMaxDuration(%s)=%s, want %s", test.input, got, test.want)
+		}
 	}
 }
