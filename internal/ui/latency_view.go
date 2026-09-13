@@ -23,14 +23,17 @@ func (m Model) renderLatencyScreen() string {
 	list = append(list, mutedStyle.Render("provider/model                              attempts logical  ok  err  p50     p95     max"))
 	start := min(m.latencyOffset, max(0, len(summaries)-topRows))
 	end := min(len(summaries), start+topRows)
+	thumbStart, thumbEnd := scrollbarThumb(topRows, len(summaries), start)
 	for index := start; index < end; index++ {
 		summary := summaries[index]
 		line := fmt.Sprintf("%-40s %8d %7d %3d %4d  %-7s %-7s %-7s", truncateText(summary.Key, 40), summary.Attempts, summary.LogicalRequests, summary.Success, summary.Errors, formatLatency(latency.Percentile(summary.Durations, 50)), formatLatency(latency.Percentile(summary.Durations, 95)), formatLatency(maxDuration(summary.Durations)))
-		line = truncateText(line, max(1, m.width))
-		line += strings.Repeat(" ", max(0, m.width-lipgloss.Width(line)))
+		contentWidth := max(1, m.width-2)
+		line = truncateText(line, contentWidth)
+		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if index == selected {
 			line = renderSelectedLine(line)
 		}
+		line += " " + scrollbarCell(index-start, thumbStart, thumbEnd)
 		list = append(list, line)
 	}
 
