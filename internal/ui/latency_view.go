@@ -77,7 +77,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 	for row := barHeight; row > 0; row-- {
 		var line strings.Builder
 		for index, count := range buckets {
-			glyph := " "
+			glyph := strings.Repeat(" ", barWidth)
 			if count*barHeight/maxCount >= row {
 				glyph = failoverStyle.Render(strings.Repeat("█", barWidth))
 			}

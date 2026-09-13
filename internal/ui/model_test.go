@@ -121,6 +121,22 @@ func TestLatencyScreenListsAndSelectsModels(t *testing.T) {
 	}
 }
 
+func TestLatencyHistogramKeepsEmptyCellsAlignedWithLabels(t *testing.T) {
+	chart := renderCenteredLatencyHistogram([]int{1, 0, 0, 0, 0, 0, 0, 0, 0, 1}, latencyBucketLabels(100*time.Second, 10), 100, 8)
+	lines := strings.Split(chart, "\n")
+	if len(lines) == 0 {
+		t.Fatal("empty histogram")
+	}
+	barWidth := lipgloss.Width(lines[0])
+	labelWidth := lipgloss.Width(lines[len(lines)-1])
+	if barWidth != labelWidth {
+		t.Fatalf("bar width=%d, label width=%d; cells are not aligned", barWidth, labelWidth)
+	}
+	if !strings.Contains(chart, "10s") || !strings.Contains(chart, "100s") {
+		t.Fatalf("bucket labels missing: %s", chart)
+	}
+}
+
 func TestFailoverExpandsToFailedAndFailoverRows(t *testing.T) {
 	request := gomodel.Request{ID: "req-1", ClientModel: "virtual-smart", Terminal: true, Success: true, Attempts: []gomodel.Attempt{{Seq: 1, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 2, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 3, ProviderName: "anthropic", Model: "claude-sonnet", StatusCode: 200, Success: true}}}
 	rows := request.LogRows()
