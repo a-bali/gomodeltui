@@ -375,8 +375,10 @@ func (m Model) renderLogs(width int) string {
 			timestamp = "--:--:--"
 		}
 		responseTime := "-"
+		responseTimeRendered := mutedStyle.Render(responseTime)
 		if request.Duration > 0 {
 			responseTime = fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
+			responseTimeRendered = responseTimeStyle(request.Duration).Render(responseTime)
 		}
 		arrow := mutedStyle.Render(" -> ")
 		session := ""
@@ -387,7 +389,7 @@ func (m Model) renderLogs(width int) string {
 		if request.Failover {
 			route += " (failover)"
 		}
-		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + route + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTime + mutedStyle.Render("ms")
+		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + route + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTimeRendered + mutedStyle.Render("ms")
 		if request.Error != "" {
 			prefix += " " + request.Error
 		}
@@ -741,6 +743,17 @@ func statusStyle(status string) lipgloss.Style {
 		return successStyle
 	}
 	return errorStyle
+}
+
+func responseTimeStyle(duration time.Duration) lipgloss.Style {
+	switch {
+	case duration < 5*time.Second:
+		return successStyle
+	case duration <= 30*time.Second:
+		return failoverStyle
+	default:
+		return errorStyle
+	}
 }
 
 func chartAreaHeight(height int) int    { return max(4, height/3-2) }

@@ -84,6 +84,21 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	}
 }
 
+func TestResponseTimeStyle(t *testing.T) {
+	if responseTimeStyle(5*time.Second).GetForeground() != failoverStyle.GetForeground() {
+		t.Fatal("5 seconds should be yellow")
+	}
+	if responseTimeStyle(30*time.Second).GetForeground() != failoverStyle.GetForeground() {
+		t.Fatal("30 seconds should be yellow")
+	}
+	if responseTimeStyle(4999*time.Millisecond).GetForeground() != successStyle.GetForeground() {
+		t.Fatal("under 5 seconds should be green")
+	}
+	if responseTimeStyle(30*time.Second+time.Millisecond).GetForeground() != errorStyle.GetForeground() {
+		t.Fatal("over 30 seconds should be red")
+	}
+}
+
 func TestFailoverExpandsToFailedAndFailoverRows(t *testing.T) {
 	request := gomodel.Request{ID: "req-1", ClientModel: "virtual-smart", Terminal: true, Success: true, Attempts: []gomodel.Attempt{{Seq: 1, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 2, ProviderName: "openai", Model: "gpt-4o", StatusCode: 503, ErrorType: "upstream", Success: false}, {Seq: 3, ProviderName: "anthropic", Model: "claude-sonnet", StatusCode: 200, Success: true}}}
 	rows := request.LogRows()
