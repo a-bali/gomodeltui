@@ -78,7 +78,11 @@ func (s *Store) Histogram(key string, buckets int) []int {
 		buckets = 1
 	}
 	var durations []time.Duration
+	var globalMax time.Duration
 	for _, sample := range s.samples {
+		if sample.Duration > globalMax {
+			globalMax = sample.Duration
+		}
 		if sample.Key == key && sample.Duration > 0 {
 			durations = append(durations, sample.Duration)
 		}
@@ -87,18 +91,23 @@ func (s *Store) Histogram(key string, buckets int) []int {
 	if len(durations) == 0 {
 		return result
 	}
-	maxDuration := durations[0]
-	for _, duration := range durations[1:] {
-		if duration > maxDuration {
-			maxDuration = duration
-		}
-	}
+	bucketWidth := (globalMax + time.Duration(buckets) - 1) / time.Duration(buckets)
 	for _, duration := range durations {
-		index := int(duration * time.Duration(buckets) / (maxDuration + time.Nanosecond))
+		index := int(duration / bucketWidth)
 		if index >= buckets {
 			index = buckets - 1
 		}
 		result[index]++
+	}
+	return result
+}
+
+func (s *Store) MaxDuration() time.Duration {
+	var result time.Duration
+	for _, sample := range s.samples {
+		if sample.Duration > result {
+			result = sample.Duration
+		}
 	}
 	return result
 }

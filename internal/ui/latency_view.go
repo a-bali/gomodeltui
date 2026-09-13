@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const latencyHistogramBuckets = 10
+
 func (m Model) renderLatencyScreen() string {
 	summaries := m.latencyStore.Summaries()
 	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render("  l/Esc back  ↑↓ select  Home/End")
@@ -37,8 +39,8 @@ func (m Model) renderLatencyScreen() string {
 
 	selectedSummary := summaries[selected]
 	histHeight := max(3, m.height-len(list)-4)
-	histogram := renderLatencyHistogram(m.latencyStore.Histogram(selectedSummary.Key, max(1, m.width-8)), m.width, histHeight)
-	chartHeader := fmt.Sprintf("%s  p50 %s  p95 %s  max %s", selectedSummary.Key, formatLatency(latency.Percentile(selectedSummary.Durations, 50)), formatLatency(latency.Percentile(selectedSummary.Durations, 95)), formatLatency(maxDuration(selectedSummary.Durations)))
+	histogram := renderLatencyHistogram(m.latencyStore.Histogram(selectedSummary.Key, latencyHistogramBuckets), m.width, histHeight)
+	chartHeader := fmt.Sprintf("%s  10 buckets: 0–%s  p50 %s  p95 %s  max %s", selectedSummary.Key, formatLatency(m.latencyStore.MaxDuration()), formatLatency(latency.Percentile(selectedSummary.Durations, 50)), formatLatency(latency.Percentile(selectedSummary.Durations, 95)), formatLatency(maxDuration(selectedSummary.Durations)))
 	return strings.Join(append(append([]string{header}, list...), chartHeader, histogram), "\n")
 }
 

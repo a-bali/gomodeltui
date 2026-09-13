@@ -21,9 +21,13 @@ func TestStoreSummariesSortByAttemptsAndTrackLogicalRequests(t *testing.T) {
 func TestHistogramAndPercentile(t *testing.T) {
 	store := NewStore()
 	store.AddRequest([]Sample{{Key: "a/m", Duration: time.Second}, {Key: "a/m", Duration: 2 * time.Second}, {Key: "a/m", Duration: 4 * time.Second}})
+	store.AddRequest([]Sample{{Key: "b/m", Duration: 8 * time.Second}})
 	histogram := store.Histogram("a/m", 4)
-	if histogram[0] != 1 || histogram[1] != 1 || histogram[3] != 1 {
+	if histogram[0] != 1 || histogram[1] != 1 || histogram[3] != 0 || histogram[2] != 1 {
 		t.Fatalf("histogram=%v", histogram)
+	}
+	if got := store.MaxDuration(); got != 8*time.Second {
+		t.Fatalf("max duration=%s", got)
 	}
 	summary := store.Summaries()[0]
 	if got := Percentile(summary.Durations, 50); got != 2*time.Second {
