@@ -67,7 +67,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 	if len(buckets) == 0 || width < 1 || height < 1 {
 		return ""
 	}
-	barWidth := max(2, min(8, (width-len(buckets)+1)/len(buckets)))
+	barWidth := max(2, (width-len(buckets)+1)/len(buckets))
 	maxCount := 1
 	for _, count := range buckets {
 		maxCount = max(maxCount, count)
@@ -83,7 +83,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 			}
 			line.WriteString(glyph)
 			if index+1 < len(buckets) {
-				line.WriteByte(' ')
+				line.WriteString(mutedStyle.Render("│"))
 			}
 		}
 		lines = append(lines, centerLine(line.String(), width))
@@ -92,7 +92,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 	for index, label := range labels {
 		labelLine.WriteString(centerText(truncateText(label, barWidth), barWidth))
 		if index+1 < len(labels) {
-			labelLine.WriteByte(' ')
+			labelLine.WriteString(mutedStyle.Render("│"))
 		}
 	}
 	lines = append(lines, centerLine(labelLine.String(), width))
