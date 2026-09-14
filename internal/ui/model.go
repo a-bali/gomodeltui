@@ -505,7 +505,7 @@ func (m Model) renderLogs(width int) string {
 		}
 		prefix += " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
 		if request.Error != "" {
-			prefix += " " + request.Error
+			prefix += " " + collapsePreview(request.Error)
 		}
 		line := prefix
 		if request.LastTurn != "" {

@@ -87,6 +87,27 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	}
 }
 
+func TestErrorPreviewIsCollapsedToOneLogLine(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 300, 30
+	model.logs = []gomodel.Request{{
+		Timestamp:   time.Date(2026, 9, 10, 12, 42, 6, 0, time.UTC),
+		UserPath:    "/agent/hermes",
+		ClientModel: "virtual-free",
+		RoutedModel: "cerebras/gpt-oss-120b",
+		StatusCode:  "400",
+		Error:       "messages.2.assistant.reasoning_content: property is unsupported\n\nadditional detail",
+		Terminal:    true,
+	}}
+	row := model.renderLogs(model.width)
+	if strings.Contains(row, "\n") {
+		t.Fatalf("error preview introduced an extra log line: %q", row)
+	}
+	if !strings.Contains(row, "property is unsupported additional detail") {
+		t.Fatalf("collapsed error missing from row: %q", row)
+	}
+}
+
 func TestPopupRoutingAttemptsShowFailureDetails(t *testing.T) {
 	raw := `{"type":"audit.completed","attempts":[{"provider_name":"opencode-go","model":"deepseek-v4.1-flash","status_code":400,"success":false,"error_type":"invalid_request_error","error_code":"unsupported_parameter","error_message":"response_format is unavailable"},{"provider_name":"opencode-go","model":"mimo-v2.5","status_code":200,"success":true}]}`
 	got := strings.Join(buildPopupSummaryLines(raw), "\n")
