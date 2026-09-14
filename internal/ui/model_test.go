@@ -87,6 +87,16 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	}
 }
 
+func TestPopupRoutingAttemptsShowFailureDetails(t *testing.T) {
+	raw := `{"type":"audit.completed","attempts":[{"provider_name":"opencode-go","model":"deepseek-v4.1-flash","status_code":400,"success":false,"error_type":"invalid_request_error","error_code":"unsupported_parameter","error_message":"response_format is unavailable"},{"provider_name":"opencode-go","model":"mimo-v2.5","status_code":200,"success":true}]}`
+	got := strings.Join(buildPopupSummaryLines(raw), "\n")
+	for _, want := range []string{"error_type: invalid_request_error", "error_code: unsupported_parameter", "error_message: response_format is unavailable"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("popup missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestPendingRequestRowIsNotRenderedAsSuccessful(t *testing.T) {
 	model := NewModel(nil)
 	model.width, model.height = 160, 30

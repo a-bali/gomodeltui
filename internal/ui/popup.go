@@ -37,6 +37,13 @@ func buildPopupLines(raw string) []string {
 					result = "success"
 				}
 				lines = append(lines, fmt.Sprintf("  %d  %s/%s  %s  %s", index+1, provider, model, status, result))
+				if result == "error" {
+					lines = append(lines,
+						"      error_type: "+firstJSONString(item, "error_type"),
+						"      error_code: "+firstJSONString(item, "error_code"),
+						"      error_message: "+firstJSONString(item, "error_message"),
+					)
+				}
 			}
 		}
 	}
