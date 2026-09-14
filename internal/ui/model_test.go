@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -210,6 +211,39 @@ func TestFollowModeAndRequestNavigation(t *testing.T) {
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeySpace})
 	if !model.following || model.selected != 2 {
 		t.Fatalf("follow state: following=%v selected=%d", model.following, model.selected)
+	}
+}
+
+func TestConnectionLossStaysInDisconnectedStateUntilReconnectInterval(t *testing.T) {
+	model := NewModel(nil)
+	model.connected = true
+	model.connecting = false
+	_, _ = model.Update(errMsg{err: context.Canceled})
+	if model.connected || model.connecting {
+		t.Fatalf("connection state after error: connected=%v connecting=%v", model.connected, model.connecting)
+	}
+
+	model.lastConnectAt = time.Now()
+	_, cmd := model.Update(tickMsg(time.Now()))
+	if model.connecting || cmd == nil {
+		t.Fatalf("unexpected early reconnect state: connecting=%v cmd=%v", model.connecting, cmd == nil)
+	}
+
+	model.lastConnectAt = time.Now().Add(-reconnectInterval)
+	_, cmd = model.Update(tickMsg(time.Now()))
+	if !model.connecting || cmd == nil {
+		t.Fatalf("expected reconnect attempt: connecting=%v cmd=%v", model.connecting, cmd == nil)
+	}
+}
+
+func TestManualReconnectStartsImmediately(t *testing.T) {
+	model := NewModel(nil)
+	model.connected = false
+	model.connecting = false
+	model.lastConnectAt = time.Now()
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if !model.connecting || cmd == nil {
+		t.Fatalf("manual reconnect did not start: connecting=%v cmd=%v", model.connecting, cmd == nil)
 	}
 }
 

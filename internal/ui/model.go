@@ -28,6 +28,11 @@ type tickMsg time.Time
 
 const maxLogItems = 1000
 
+const (
+	reconnectInterval = 10 * time.Second
+	connectTimeout    = 8 * time.Second
+)
+
 type Model struct {
 	client          *gomodel.Client
 	reducer         *gomodel.Reducer
@@ -59,13 +64,15 @@ type Model struct {
 	reader          *bufio.Reader
 	lastEventID     string
 	connected       bool
+	connecting      bool
+	lastConnectAt   time.Time
 	logOffset       int
 	width, height   int
 	err             string
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now()}
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
@@ -76,7 +83,9 @@ func refreshCmd() tea.Cmd {
 
 func connectCmd(client *gomodel.Client, lastID string) tea.Cmd {
 	return func() tea.Msg {
-		response, err := client.LiveLogs(context.Background(), lastID)
+		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+		defer cancel()
+		response, err := client.LiveLogs(ctx, lastID)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -301,11 +310,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.stream != nil {
 				_ = m.stream.Close()
 			}
-			m.connected = false
+			m.connected, m.connecting = false, true
+			m.lastConnectAt = time.Now()
 			return m, connectCmd(m.client, m.lastEventID)
 		}
 	case connectMsg:
-		m.stream, m.reader, m.connected, m.err = msg.response, msg.reader, true, ""
+		m.stream, m.reader, m.connected, m.connecting, m.err = msg.response, msg.reader, true, false, ""
 		return m, readEventCmd(m.reader)
 	case eventMsg:
 		if msg.event.ID != "" {
@@ -335,7 +345,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, readEventCmd(m.reader)
 	case errMsg:
-		m.connected, m.err = false, msg.err.Error()
+		m.connected, m.connecting, m.err = false, false, msg.err.Error()
 		if m.stream != nil {
 			_ = m.stream.Close()
 			m.stream = nil
@@ -349,9 +359,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.following {
 			m.followPulse = (m.followPulse + 1) % 3
 		}
-		if m.connected {
+		if m.connected || m.connecting {
 			return m, refreshCmd()
 		}
+		if time.Since(m.lastConnectAt) < reconnectInterval {
+			return m, refreshCmd()
+		}
+		m.connecting = true
+		m.lastConnectAt = time.Now()
 		return m, tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd())
 	}
 	return m, nil
