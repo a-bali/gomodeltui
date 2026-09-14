@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +116,35 @@ func TestStaleConnectionErrorDoesNotTurnCurrentConnectionRed(t *testing.T) {
 	_, _ = model.Update(errMsg{err: context.Canceled, connectionID: 1})
 	if !model.connected || model.connecting {
 		t.Fatalf("stale connection error changed current state: connected=%v connecting=%v", model.connected, model.connecting)
+	}
+}
+
+func TestConnectCommandKeepsSSEBodyAliveAfterHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "text/event-stream")
+		flusher, ok := writer.(http.Flusher)
+		if !ok {
+			t.Fatal("test server does not support flushing")
+		}
+		_, _ = writer.Write([]byte("event: heartbeat\ndata: {}\n\n"))
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	client, err := gomodel.NewClient(server.URL, "token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := connectCmd(client, "", 1)()
+	connected, ok := message.(connectMsg)
+	if !ok {
+		t.Fatalf("connect command returned %T, want connectMsg", message)
+	}
+	defer connected.response.Close()
+
+	eventMessage := readEventCmd(connected.reader, 1)()
+	if event, ok := eventMessage.(eventMsg); !ok || event.event.Event != "heartbeat" {
+		t.Fatalf("SSE body was not readable after connect: %#v", eventMessage)
 	}
 }
 

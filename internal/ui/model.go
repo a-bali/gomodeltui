@@ -37,7 +37,6 @@ const maxLogItems = 1000
 
 const (
 	reconnectInterval = 10 * time.Second
-	connectTimeout    = 8 * time.Second
 )
 
 type Model struct {
@@ -93,9 +92,11 @@ func refreshCmd() tea.Cmd {
 
 func connectCmd(client *gomodel.Client, lastID string, connectionID uint64) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-		defer cancel()
-		response, err := client.LiveLogs(ctx, lastID)
+		// The SSE response body must retain its request context for the entire
+		// lifetime of the stream. A timeout context canceled after headers arrive
+		// would make a healthy stream look disconnected while buffered events can
+		// still be drained from it.
+		response, err := client.LiveLogs(context.Background(), lastID)
 		if err != nil {
 			return errMsg{err: err, connectionID: connectionID}
 		}
