@@ -18,12 +18,19 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-type eventMsg struct{ event gomodel.Event }
-type connectMsg struct {
-	response io.ReadCloser
-	reader   *bufio.Reader
+type eventMsg struct {
+	event        gomodel.Event
+	connectionID uint64
 }
-type errMsg struct{ err error }
+type connectMsg struct {
+	response     io.ReadCloser
+	reader       *bufio.Reader
+	connectionID uint64
+}
+type errMsg struct {
+	err          error
+	connectionID uint64
+}
 type tickMsg time.Time
 
 const maxLogItems = 1000
@@ -66,40 +73,43 @@ type Model struct {
 	connected       bool
 	connecting      bool
 	lastConnectAt   time.Time
+	connectionID    uint64
 	logOffset       int
 	width, height   int
 	err             string
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now()}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
 }
 
-func (m Model) Init() tea.Cmd { return tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd()) }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd())
+}
 
 func refreshCmd() tea.Cmd {
 	return tea.Tick(3*time.Second, func(at time.Time) tea.Msg { return tickMsg(at) })
 }
 
-func connectCmd(client *gomodel.Client, lastID string) tea.Cmd {
+func connectCmd(client *gomodel.Client, lastID string, connectionID uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 		defer cancel()
 		response, err := client.LiveLogs(ctx, lastID)
 		if err != nil {
-			return errMsg{err}
+			return errMsg{err: err, connectionID: connectionID}
 		}
-		return connectMsg{response: response.Body, reader: bufio.NewReader(response.Body)}
+		return connectMsg{response: response.Body, reader: bufio.NewReader(response.Body), connectionID: connectionID}
 	}
 }
 
-func readEventCmd(reader *bufio.Reader) tea.Cmd {
+func readEventCmd(reader *bufio.Reader, connectionID uint64) tea.Cmd {
 	return func() tea.Msg {
 		event, err := gomodel.ReadEvent(reader)
 		if err != nil {
-			return errMsg{err}
+			return errMsg{err: err, connectionID: connectionID}
 		}
-		return eventMsg{event: event}
+		return eventMsg{event: event, connectionID: connectionID}
 	}
 }
 
@@ -310,14 +320,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.stream != nil {
 				_ = m.stream.Close()
 			}
+			m.connectionID++
 			m.connected, m.connecting = false, true
 			m.lastConnectAt = time.Now()
-			return m, connectCmd(m.client, m.lastEventID)
+			return m, connectCmd(m.client, m.lastEventID, m.connectionID)
 		}
 	case connectMsg:
+		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
+			_ = msg.response.Close()
+			return m, nil
+		}
+		if m.stream != nil {
+			_ = m.stream.Close()
+		}
 		m.stream, m.reader, m.connected, m.connecting, m.err = msg.response, msg.reader, true, false, ""
-		return m, readEventCmd(m.reader)
+		return m, readEventCmd(m.reader, m.connectionID)
 	case eventMsg:
+		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
+			return m, nil
+		}
 		if msg.event.ID != "" {
 			m.lastEventID = msg.event.ID
 		}
@@ -343,8 +364,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		return m, readEventCmd(m.reader)
+		return m, readEventCmd(m.reader, m.connectionID)
 	case errMsg:
+		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
+			return m, nil
+		}
 		m.connected, m.connecting, m.err = false, false, msg.err.Error()
 		if m.stream != nil {
 			_ = m.stream.Close()
@@ -367,7 +391,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.connecting = true
 		m.lastConnectAt = time.Now()
-		return m, tea.Batch(connectCmd(m.client, m.lastEventID), refreshCmd())
+		m.connectionID++
+		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd())
 	}
 	return m, nil
 }
@@ -439,21 +464,24 @@ func (m Model) renderLogs(width int) string {
 	thumbStart, thumbEnd := scrollbarThumb(rows, len(m.logs), start)
 	var out []string
 	for index, request := range m.logs[start:end] {
-		icon := successStyle.Render("✓")
-		if request.Terminal && !request.Success {
-			icon = errorStyle.Render("✗")
-		} else if request.Terminal && request.Failover {
+		icon := mutedStyle.Render("·")
+		if request.Terminal && request.Failover && request.Success {
 			icon = failoverStyle.Render("✓")
+		} else if request.Terminal && !request.Success {
+			icon = errorStyle.Render("✗")
+		} else if request.Terminal && request.Success {
+			icon = successStyle.Render("✓")
 		}
 		timestamp := request.Timestamp.Format("15:04:05")
 		if request.Timestamp.IsZero() {
 			timestamp = "--:--:--"
 		}
-		responseTime := "-"
-		responseTimeRendered := mutedStyle.Render(responseTime)
+		responseTimeRendered := mutedStyle.Render("-")
+		responseTimeSuffix := ""
 		if request.Duration > 0 {
-			responseTime = fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
+			responseTime := fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
 			responseTimeRendered = responseTimeStyle(request.Duration).Render(responseTime)
+			responseTimeSuffix = mutedStyle.Render("ms")
 		}
 		arrow := mutedStyle.Render(" -> ")
 		session := ""
@@ -464,7 +492,17 @@ func (m Model) renderLogs(width int) string {
 		if request.Failover {
 			route += " (failover)"
 		}
-		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + userPathStyle(request.UserPath).Render(request.UserPath) + " " + session + arrow + request.ClientModel + arrow + route + " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(request.StatusCode).Render(request.StatusCode) + " " + responseTimeRendered + mutedStyle.Render("ms")
+		status := request.StatusCode
+		if status == "" {
+			status = "-"
+		}
+		path := userPathStyle(request.UserPath).Render(request.UserPath)
+		target := strings.Join(nonEmpty(request.ClientModel, route), arrow)
+		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + path + " " + session
+		if target != "" {
+			prefix += arrow + target
+		}
+		prefix += " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
 		if request.Error != "" {
 			prefix += " " + request.Error
 		}
@@ -845,4 +883,14 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func nonEmpty(values ...string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }

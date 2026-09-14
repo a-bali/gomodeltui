@@ -85,6 +85,38 @@ func TestRequestRowSessionAndLastTurn(t *testing.T) {
 	}
 }
 
+func TestPendingRequestRowIsNotRenderedAsSuccessful(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 160, 30
+	model.logs = []gomodel.Request{{
+		Timestamp:   time.Date(2026, 9, 10, 12, 42, 6, 0, time.UTC),
+		UserPath:    "/agent/hermes",
+		SessionID:   "session-xyz",
+		RoutedModel: "opencode-go/deepseek-v4.1-flash",
+	}}
+	row := model.renderLogs(model.width)
+	if strings.Contains(row, "✓") || strings.Contains(row, "-ms") {
+		t.Fatalf("pending row rendered as completed: %q", row)
+	}
+	if strings.Contains(row, "->  ->") {
+		t.Fatalf("empty model created duplicate arrows: %q", row)
+	}
+	if !strings.Contains(row, "·") || !strings.Contains(row, " - ") {
+		t.Fatalf("pending row lacks pending/status markers: %q", row)
+	}
+}
+
+func TestStaleConnectionErrorDoesNotTurnCurrentConnectionRed(t *testing.T) {
+	model := NewModel(nil)
+	model.connected = true
+	model.connecting = false
+	model.connectionID = 2
+	_, _ = model.Update(errMsg{err: context.Canceled, connectionID: 1})
+	if !model.connected || model.connecting {
+		t.Fatalf("stale connection error changed current state: connected=%v connecting=%v", model.connected, model.connecting)
+	}
+}
+
 func TestResponseTimeStyle(t *testing.T) {
 	if responseTimeStyle(5*time.Second).GetForeground() != failoverStyle.GetForeground() {
 		t.Fatal("5 seconds should be yellow")
