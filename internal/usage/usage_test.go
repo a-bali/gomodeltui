@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,7 +38,8 @@ func TestParseCommandCodeUsage(t *testing.T) {
 }
 
 func TestCommandCodeCookieHeaderAcceptsBareSessionToken(t *testing.T) {
-	if got := commandCodeCookieHeader("session-token"); got != "__Secure-better-auth.session_token=session-token" {
+	got := commandCodeCookieHeader("session-token")
+	if !strings.Contains(got, "__Secure-commandcode_prod_.session_token=session-token") || !strings.Contains(got, "__Secure-better-auth.session_token=session-token") {
 		t.Fatalf("header=%q", got)
 	}
 	if got := commandCodeCookieHeader("Cookie: other=value; session=value"); got != "other=value; session=value" {

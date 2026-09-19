@@ -87,8 +87,22 @@ func commandCodeCookieHeader(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimSpace(strings.TrimPrefix(value, "Cookie:"))
 	if !strings.Contains(value, "=") && !strings.Contains(value, ";") {
-		// Command Code uses Better Auth's secure production session cookie.
-		return "__Secure-better-auth.session_token=" + value
+		// A bare token does not identify which Better Auth deployment issued it.
+		// Send it under every session name Command Code has used in production;
+		// the server reads only its current cookie name.
+		names := []string{
+			"__Secure-commandcode_prod_.session_token",
+			"commandcode_prod_.session_token",
+			"__Host-commandcode_prod_.session_token",
+			"__Host-better-auth.session_token",
+			"__Secure-better-auth.session_token",
+			"better-auth.session_token",
+		}
+		cookies := make([]string, len(names))
+		for index, name := range names {
+			cookies[index] = name + "=" + value
+		}
+		return strings.Join(cookies, "; ")
 	}
 	return value
 }
