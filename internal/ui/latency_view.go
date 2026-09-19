@@ -19,16 +19,15 @@ func (m Model) renderLatencyScreen() string {
 	}
 	selected := min(m.latencySelected, len(summaries)-1)
 	topRows := latencyListRows(m.height)
+	contentWidth := max(1, m.width-1)
 	var list []string
-	list = append(list, mutedStyle.Render("provider/model                              attempts logical  ok  err  p50     p95     max"))
+	list = append(list, mutedStyle.Render(renderLatencyTableHeader(contentWidth))+" ")
 	start := min(m.latencyOffset, max(0, len(summaries)-topRows))
 	end := min(len(summaries), start+topRows)
 	thumbStart, thumbEnd := scrollbarThumb(topRows, len(summaries), start)
 	for index := start; index < end; index++ {
 		summary := summaries[index]
-		line := fmt.Sprintf("%-40s %8d %7d %3d %4d  %-7s %-7s %-7s", truncateText(summary.Key, 40), summary.Attempts, summary.LogicalRequests, summary.Success, summary.Errors, formatLatency(latency.Percentile(summary.Durations, 50)), formatLatency(latency.Percentile(summary.Durations, 95)), formatLatency(maxDuration(summary.Durations)))
-		contentWidth := max(1, m.width-2)
-		line = truncateText(line, contentWidth)
+		line := renderLatencyTableRow(summary, contentWidth)
 		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if index == selected {
 			line = renderSelectedLine(line)
@@ -46,6 +45,36 @@ func (m Model) renderLatencyScreen() string {
 	labels := latencyBucketLabels(scaleMax, latencyHistogramBuckets)
 	histogram := renderCenteredLatencyHistogram(m.latencyStore.HistogramWithMax(selectedSummary.Key, latencyHistogramBuckets, scaleMax), labels, m.width, bottomHeight)
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
+}
+
+const latencyMetricWidth = 8
+
+func latencyModelColumnWidth(width int) int {
+	// Seven metric columns and their separators occupy the remainder of the
+	// table; model routing gets every other available terminal column.
+	return max(1, width-(latencyMetricWidth*7)-7)
+}
+
+func renderLatencyTableHeader(width int) string {
+	modelWidth := latencyModelColumnWidth(width)
+	line := fmt.Sprintf("%-*s %*s %*s %*s %*s %*s %*s %*s",
+		modelWidth, "provider/model",
+		latencyMetricWidth, "attempts", latencyMetricWidth, "logical",
+		latencyMetricWidth, "ok", latencyMetricWidth, "err",
+		latencyMetricWidth, "p50", latencyMetricWidth, "p95", latencyMetricWidth, "max")
+	return truncateText(line, width)
+}
+
+func renderLatencyTableRow(summary latency.Summary, width int) string {
+	modelWidth := latencyModelColumnWidth(width)
+	line := fmt.Sprintf("%-*s %*d %*d %*d %*d %*s %*s %*s",
+		modelWidth, truncateText(summary.Key, modelWidth),
+		latencyMetricWidth, summary.Attempts, latencyMetricWidth, summary.LogicalRequests,
+		latencyMetricWidth, summary.Success, latencyMetricWidth, summary.Errors,
+		latencyMetricWidth, formatLatency(latency.Percentile(summary.Durations, 50)),
+		latencyMetricWidth, formatLatency(latency.Percentile(summary.Durations, 95)),
+		latencyMetricWidth, formatLatency(maxDuration(summary.Durations)))
+	return truncateText(line, width)
 }
 
 func latencyTopRows(height int) int { return max(3, height*40/100) }
