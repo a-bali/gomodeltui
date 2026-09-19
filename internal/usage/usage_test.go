@@ -47,6 +47,13 @@ func TestParseCommandCodeUsageAcceptsNumericReset(t *testing.T) {
 	}
 }
 
+func TestParseCommandSubscriptionReadsBillingReset(t *testing.T) {
+	snapshot, err := parseCommandSubscription([]byte(`{"success":true,"data":{"currentPeriodEnd":1789992000000}}`), time.Now())
+	if err != nil || snapshot.CreditResetAt.Unix() != 1789992000 {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+}
+
 func TestCommandCodeCookieHeaderAcceptsBareSessionToken(t *testing.T) {
 	got := commandCodeCookieHeader("session-token")
 	if !strings.Contains(got, "__Secure-commandcode_prod_.session_token=session-token") || !strings.Contains(got, "__Secure-better-auth.session_token=session-token") {

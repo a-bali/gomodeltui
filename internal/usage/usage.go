@@ -19,11 +19,12 @@ type Window struct {
 }
 
 type Snapshot struct {
-	Provider string
-	Source   string
-	Windows  []Window
-	Credits  string
-	Updated  time.Time
+	Provider      string
+	Source        string
+	Windows       []Window
+	Credits       string
+	CreditResetAt time.Time
+	Updated       time.Time
 }
 
 type Fetcher interface {
@@ -72,15 +73,35 @@ type CommandCode struct {
 func (CommandCode) Provider() string { return "Command Code" }
 
 func (f CommandCode) Fetch(ctx context.Context) (Snapshot, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.commandcode.ai/internal/billing/credits", nil)
+	creditsRequest, err := f.request(ctx, "/internal/billing/credits")
 	if err != nil {
 		return Snapshot{}, err
+	}
+	snapshot, err := fetchJSON(f.Client, creditsRequest, f.Provider(), "session cookie", parseCommandCode)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	// Subscription data is enrichment only: credits and rolling windows remain
+	// useful when this endpoint is temporarily unavailable.
+	subscriptionRequest, err := f.request(ctx, "/internal/billing/subscriptions")
+	if err == nil {
+		if subscription, subscriptionErr := fetchJSON(f.Client, subscriptionRequest, f.Provider(), "session cookie", parseCommandSubscription); subscriptionErr == nil {
+			snapshot.CreditResetAt = subscription.CreditResetAt
+		}
+	}
+	return snapshot, nil
+}
+
+func (f CommandCode) request(ctx context.Context, path string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.commandcode.ai"+path, nil)
+	if err != nil {
+		return nil, err
 	}
 	req.Header.Set("Cookie", commandCodeCookieHeader(f.Cookie))
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Origin", "https://commandcode.ai")
 	req.Header.Set("Referer", "https://commandcode.ai/")
-	return fetchJSON(f.Client, req, f.Provider(), "session cookie", parseCommandCode)
+	return req, nil
 }
 
 func commandCodeCookieHeader(value string) string {
@@ -259,6 +280,23 @@ func parseCommandCode(raw json.RawMessage, _ time.Time) (Snapshot, error) {
 	}
 	monthly, _ := numberValue(credits["monthlyCredits"])
 	return Snapshot{Windows: []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}, Credits: fmt.Sprintf("$%.2f monthly credits remaining", monthly)}, nil
+}
+
+func parseCommandSubscription(raw json.RawMessage, _ time.Time) (Snapshot, error) {
+	var body struct {
+		Success bool `json:"success"`
+		Data    struct {
+			CurrentPeriodEnd any `json:"currentPeriodEnd"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return Snapshot{}, err
+	}
+	if !body.Success {
+		return Snapshot{}, fmt.Errorf("Command Code subscription lookup was unsuccessful")
+	}
+	reset, _ := dateValue(body.Data.CurrentPeriodEnd)
+	return Snapshot{CreditResetAt: reset}, nil
 }
 
 func parseCodex(raw json.RawMessage, now time.Time) (Snapshot, error) {

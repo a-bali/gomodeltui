@@ -51,7 +51,11 @@ func (m Model) renderUsageScreen() string {
 			lines = append(lines, fmt.Sprintf("  %-8s %6.1f%% used  %s", window.Label+":", window.Used, mutedStyle.Render(reset)))
 		}
 		if snapshot.Credits != "" {
-			lines = append(lines, "  "+mutedStyle.Render(snapshot.Credits))
+			creditLine := snapshot.Credits
+			if !snapshot.CreditResetAt.IsZero() {
+				creditLine += "  resets " + snapshot.CreditResetAt.Local().Format("Mon 15:04")
+			}
+			lines = append(lines, "  "+mutedStyle.Render(creditLine))
 		}
 	}
 	return strings.Join(lines, "\n")
