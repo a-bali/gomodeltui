@@ -240,32 +240,25 @@ func dateValue(value any) (time.Time, bool) {
 	return time.Unix(int64(seconds), 0), true
 }
 
-func parseCommandCode(raw json.RawMessage, now time.Time) (Snapshot, error) {
-	var body struct {
-		Credits struct {
-			Monthly float64 `json:"monthlyCredits"`
-		} `json:"credits"`
-		Limits struct {
-			FiveHour struct {
-				Used, Cap float64
-				ResetAt   time.Time `json:"resetAt"`
-			} `json:"fiveHour"`
-			Weekly struct {
-				Used, Cap float64
-				ResetAt   time.Time `json:"resetAt"`
-			} `json:"weekly"`
-		} `json:"windowLimits"`
-	}
+func parseCommandCode(raw json.RawMessage, _ time.Time) (Snapshot, error) {
+	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return Snapshot{}, err
 	}
-	window := func(label string, used, cap float64, reset time.Time) Window {
+	credits, _ := body["credits"].(map[string]any)
+	limits, _ := body["windowLimits"].(map[string]any)
+	window := func(label string, value any) Window {
+		limit, _ := value.(map[string]any)
+		used, _ := numberValue(limit["used"])
+		cap, _ := numberValue(limit["cap"])
+		reset, _ := dateValue(limit["resetAt"])
 		if cap == 0 {
 			return Window{Label: label}
 		}
 		return Window{Label: label, Used: used * 100 / cap, ResetsAt: reset}
 	}
-	return Snapshot{Windows: []Window{window("5h", body.Limits.FiveHour.Used, body.Limits.FiveHour.Cap, body.Limits.FiveHour.ResetAt), window("weekly", body.Limits.Weekly.Used, body.Limits.Weekly.Cap, body.Limits.Weekly.ResetAt)}, Credits: fmt.Sprintf("$%.2f monthly credits remaining", body.Credits.Monthly)}, nil
+	monthly, _ := numberValue(credits["monthlyCredits"])
+	return Snapshot{Windows: []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}, Credits: fmt.Sprintf("$%.2f monthly credits remaining", monthly)}, nil
 }
 
 func parseCodex(raw json.RawMessage, now time.Time) (Snapshot, error) {
