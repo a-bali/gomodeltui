@@ -188,12 +188,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.latencyScreen = false
 			case "+", "=":
 				m.latencyBuckets = min(100, m.latencyBuckets+1)
-				m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
-				m.latencyScaleAt = time.Now()
+				m.recalculateLatencyScale(time.Now())
 			case "-":
 				m.latencyBuckets = max(2, m.latencyBuckets-1)
-				m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
-				m.latencyScaleAt = time.Now()
+				m.recalculateLatencyScale(time.Now())
+			case "c":
+				m.recalculateLatencyScale(time.Now())
 			case "up":
 				m.latencySelected = max(0, m.latencySelected-1)
 			case "down":
@@ -240,8 +240,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencyScreen = true
 			m.latencySelected = 0
 			m.latencyOffset = 0
-			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
-			m.latencyScaleAt = time.Now()
+			m.recalculateLatencyScale(time.Now())
 			return m, nil
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
@@ -387,8 +386,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, refreshCmd()
 	case tickMsg:
 		if m.latencyScreen && (m.latencyScaleAt.IsZero() || time.Since(m.latencyScaleAt) >= time.Minute) {
-			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
-			m.latencyScaleAt = time.Now()
+			m.recalculateLatencyScale(time.Time(msg))
 		}
 		if m.following {
 			m.followPulse = (m.followPulse + 1) % 3
@@ -405,6 +403,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd())
 	}
 	return m, nil
+}
+
+func (m *Model) recalculateLatencyScale(at time.Time) {
+	m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
+	m.latencyScaleAt = at
 }
 
 func requestLatencySamples(rows []gomodel.Request) []latency.Sample {

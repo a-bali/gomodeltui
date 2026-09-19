@@ -13,7 +13,7 @@ const latencyHistogramBuckets = 10
 
 func (m Model) renderLatencyScreen() string {
 	summaries := m.latencyStore.Summaries()
-	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  +/- buckets:%d  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyBuckets))
+	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  +/- buckets:%d  c recalculate  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyBuckets))
 	if len(summaries) == 0 {
 		return strings.Join([]string{header, "", mutedStyle.Render("No completed request timings observed yet.")}, "\n")
 	}
@@ -101,7 +101,7 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 	for _, count := range buckets {
 		maxCount = max(maxCount, count)
 	}
-	barHeight := min(12, max(1, height-2))
+	barHeight := min(12, max(1, height-3))
 	var lines []string
 	for row := barHeight; row > 0; row-- {
 		var line strings.Builder
@@ -117,6 +117,14 @@ func renderCenteredLatencyHistogram(buckets []int, labels []string, width, heigh
 		}
 		lines = append(lines, centerLine(line.String(), width))
 	}
+	var countLine strings.Builder
+	for index, count := range buckets {
+		countLine.WriteString(centerText(fmt.Sprintf("%d", count), barWidth))
+		if index+1 < len(buckets) {
+			countLine.WriteString(mutedStyle.Render("│"))
+		}
+	}
+	lines = append(lines, centerLine(countLine.String(), width))
 	var labelLine strings.Builder
 	for index, label := range labels {
 		labelLine.WriteString(centerText(truncateText(label, barWidth), barWidth))
