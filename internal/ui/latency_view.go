@@ -13,7 +13,7 @@ const latencyHistogramBuckets = 10
 
 func (m Model) renderLatencyScreen() string {
 	summaries := m.latencyStore.Summaries()
-	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render("  l/Esc back  ↑↓/PgUp/PgDn select  Home/End")
+	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  +/- buckets:%d  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyBuckets))
 	if len(summaries) == 0 {
 		return strings.Join([]string{header, "", mutedStyle.Render("No completed request timings observed yet.")}, "\n")
 	}
@@ -40,10 +40,10 @@ func (m Model) renderLatencyScreen() string {
 	bottomHeight := max(3, m.height-latencyTopRows(m.height)-1)
 	scaleMax := m.latencyScaleMax
 	if scaleMax <= 0 {
-		scaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+		scaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
 	}
-	labels := latencyBucketLabels(scaleMax, latencyHistogramBuckets)
-	histogram := renderCenteredLatencyHistogram(m.latencyStore.HistogramWithMax(selectedSummary.Key, latencyHistogramBuckets, scaleMax), labels, m.width, bottomHeight)
+	labels := latencyBucketLabels(scaleMax, m.latencyBuckets)
+	histogram := renderCenteredLatencyHistogram(m.latencyStore.HistogramWithMax(selectedSummary.Key, m.latencyBuckets, scaleMax), labels, m.width, bottomHeight)
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
 }
 

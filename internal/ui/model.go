@@ -56,6 +56,7 @@ type Model struct {
 	latencyOffset   int
 	latencyScaleMax time.Duration
 	latencyScaleAt  time.Time
+	latencyBuckets  int
 	popup           bool
 	popupLines      []string
 	popupRawLines   []string
@@ -79,7 +80,7 @@ type Model struct {
 }
 
 func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -185,6 +186,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "l", "esc":
 				m.latencyScreen = false
+			case "+", "=":
+				m.latencyBuckets = min(100, m.latencyBuckets+1)
+				m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
+				m.latencyScaleAt = time.Now()
+			case "-":
+				m.latencyBuckets = max(2, m.latencyBuckets-1)
+				m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
+				m.latencyScaleAt = time.Now()
 			case "up":
 				m.latencySelected = max(0, m.latencySelected-1)
 			case "down":
@@ -231,7 +240,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencyScreen = true
 			m.latencySelected = 0
 			m.latencyOffset = 0
-			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), latencyHistogramBuckets)
+			m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
 			m.latencyScaleAt = time.Now()
 			return m, nil
 		case "+", "=":
