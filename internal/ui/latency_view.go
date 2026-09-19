@@ -19,9 +19,9 @@ func (m Model) renderLatencyScreen() string {
 	}
 	selected := min(m.latencySelected, len(summaries)-1)
 	topRows := latencyListRows(m.height)
-	contentWidth := max(1, m.width-1)
+	contentWidth := max(1, m.width-2)
 	var list []string
-	list = append(list, mutedStyle.Render(renderLatencyTableHeader(contentWidth))+" ")
+	list = append(list, mutedStyle.Render(renderLatencyTableHeader(contentWidth))+"  ")
 	start := min(m.latencyOffset, max(0, len(summaries)-topRows))
 	end := min(len(summaries), start+topRows)
 	thumbStart, thumbEnd := scrollbarThumb(topRows, len(summaries), start)
