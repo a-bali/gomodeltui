@@ -139,30 +139,81 @@ func fetchJSON(client *http.Client, req *http.Request, provider, source string, 
 }
 
 func parseOpenCode(raw json.RawMessage, now time.Time) (Snapshot, error) {
-	var body struct {
-		Usage struct {
-			Rolling struct {
-				Percent    float64 `json:"percent"`
-				ResetInSec int64   `json:"resetInSec"`
-			} `json:"rolling"`
-			Weekly struct {
-				Percent    float64 `json:"percent"`
-				ResetInSec int64   `json:"resetInSec"`
-			} `json:"weekly"`
-			Monthly struct {
-				Percent    float64 `json:"percent"`
-				ResetInSec int64   `json:"resetInSec"`
-			} `json:"monthly"`
-		} `json:"usage"`
-	}
+	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return Snapshot{}, err
 	}
-	windows := []Window{{"5h", body.Usage.Rolling.Percent, now.Add(time.Duration(body.Usage.Rolling.ResetInSec) * time.Second)}, {"weekly", body.Usage.Weekly.Percent, now.Add(time.Duration(body.Usage.Weekly.ResetInSec) * time.Second)}}
-	if body.Usage.Monthly.Percent > 0 || body.Usage.Monthly.ResetInSec > 0 {
-		windows = append(windows, Window{"monthly", body.Usage.Monthly.Percent, now.Add(time.Duration(body.Usage.Monthly.ResetInSec) * time.Second)})
+	usageData, ok := body["usage"].(map[string]any)
+	if !ok {
+		return Snapshot{}, fmt.Errorf("OpenCode Go usage response has no usage object")
+	}
+	rolling, ok := openCodeWindow(usageData["rolling"], "5h", now)
+	if !ok {
+		return Snapshot{}, fmt.Errorf("OpenCode Go usage response has no rolling window")
+	}
+	windows := []Window{rolling}
+	for _, item := range []struct{ key, label string }{{"weekly", "weekly"}, {"monthly", "monthly"}} {
+		if window, ok := openCodeWindow(usageData[item.key], item.label, now); ok {
+			windows = append(windows, window)
+		}
 	}
 	return Snapshot{Windows: windows}, nil
+}
+
+func openCodeWindow(value any, label string, now time.Time) (Window, bool) {
+	data, ok := value.(map[string]any)
+	if !ok {
+		return Window{}, false
+	}
+	percent, ok := numberValue(data["percent"])
+	if !ok {
+		return Window{}, false
+	}
+	window := Window{Label: label, Used: percent}
+	for _, key := range []string{"resetInSec", "resetInSeconds", "resetSeconds", "reset_sec", "resetsInSec"} {
+		if seconds, ok := numberValue(data[key]); ok && seconds > 0 {
+			window.ResetsAt = now.Add(time.Duration(seconds * float64(time.Second)))
+			return window, true
+		}
+	}
+	for _, key := range []string{"resetAt", "resetsAt", "reset_at", "resets_at", "nextReset", "renewAt"} {
+		if resetAt, ok := dateValue(data[key]); ok {
+			window.ResetsAt = resetAt
+			break
+		}
+	}
+	return window, true
+}
+
+func numberValue(value any) (float64, bool) {
+	switch value := value.(type) {
+	case float64:
+		return value, true
+	case json.Number:
+		parsed, err := value.Float64()
+		return parsed, err == nil
+	case string:
+		var parsed float64
+		_, err := fmt.Sscan(value, &parsed)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func dateValue(value any) (time.Time, bool) {
+	if text, ok := value.(string); ok {
+		parsed, err := time.Parse(time.RFC3339, text)
+		return parsed, err == nil
+	}
+	seconds, ok := numberValue(value)
+	if !ok || seconds <= 0 {
+		return time.Time{}, false
+	}
+	if seconds > 1e11 { // Unix milliseconds.
+		seconds /= 1000
+	}
+	return time.Unix(int64(seconds), 0), true
 }
 
 func parseCommandCode(raw json.RawMessage, now time.Time) (Snapshot, error) {

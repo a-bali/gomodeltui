@@ -15,6 +15,20 @@ func TestParseOpenCodeUsage(t *testing.T) {
 	}
 }
 
+func TestParseOpenCodeUsageUsesAbsoluteResetAndDoesNotInventOne(t *testing.T) {
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	snapshot, err := parseOpenCode([]byte(`{"usage":{"rolling":{"percent":12.5,"resetAt":"2026-09-19T14:00:00Z"},"weekly":{"percent":45}}}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.Windows[0].ResetsAt.Equal(time.Date(2026, 9, 19, 14, 0, 0, 0, time.UTC)) {
+		t.Fatalf("absolute reset=%s", snapshot.Windows[0].ResetsAt)
+	}
+	if !snapshot.Windows[1].ResetsAt.IsZero() {
+		t.Fatalf("missing reset was rendered as %s", snapshot.Windows[1].ResetsAt)
+	}
+}
+
 func TestParseCommandCodeUsage(t *testing.T) {
 	snapshot, err := parseCommandCode([]byte(`{"credits":{"monthlyCredits":12.5},"windowLimits":{"fiveHour":{"used":3,"cap":12,"resetAt":"2026-09-20T12:00:00Z"},"weekly":{"used":1,"cap":4,"resetAt":"2026-09-21T12:00:00Z"}}}`), time.Now())
 	if err != nil || snapshot.Windows[0].Used != 25 || snapshot.Credits != "$12.50 monthly credits remaining" {
