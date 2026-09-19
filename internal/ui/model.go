@@ -489,16 +489,20 @@ func (m Model) renderLogs(width int) string {
 		if len(request.SessionID) > 0 {
 			session = sessionStyle(request.SessionID).Render("sid:" + request.SessionID[max(0, len(request.SessionID)-3):])
 		}
-		route := request.RoutedModel
+		route := renderRoute(request.RoutedModel)
 		if request.Failover {
-			route += " (failover)"
+			route += mutedStyle.Render(" (failover)")
 		}
 		status := request.StatusCode
 		if status == "" {
 			status = "-"
 		}
 		path := userPathStyle(request.UserPath).Render(request.UserPath)
-		target := strings.Join(nonEmpty(request.ClientModel, route), arrow)
+		clientModel := ""
+		if request.ClientModel != "" {
+			clientModel = modelStyle(request.ClientModel).Render(request.ClientModel)
+		}
+		target := strings.Join(nonEmpty(clientModel, route), arrow)
 		prefix := icon + " " + mutedStyle.Render(timestamp) + " " + path + " " + session
 		if target != "" {
 			prefix += arrow + target
@@ -835,6 +839,25 @@ func userPathStyle(path string) lipgloss.Style {
 }
 
 func sessionStyle(id string) lipgloss.Style { return userPathStyle("session:" + id) }
+
+func modelStyle(model string) lipgloss.Style { return coloredValueStyle("model:" + model) }
+
+func providerStyle(provider string) lipgloss.Style { return coloredValueStyle("provider:" + provider) }
+
+func coloredValueStyle(value string) lipgloss.Style {
+	colors := []string{"39", "75", "99", "141", "171", "178", "208", "35", "44", "64"}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(value))
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(colors[hash.Sum32()%uint32(len(colors))]))
+}
+
+func renderRoute(route string) string {
+	provider, model, found := strings.Cut(route, "/")
+	if !found {
+		return modelStyle(provider).Render(provider)
+	}
+	return providerStyle(provider).Render(provider) + mutedStyle.Render("/") + modelStyle(model).Render(model)
+}
 
 func truncateText(text string, width int) string {
 	if width <= 0 {
