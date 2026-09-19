@@ -12,6 +12,7 @@ import (
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/balia/gomodeltui/internal/latency"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -270,6 +271,35 @@ func TestLatencyTableUsesTerminalWidth(t *testing.T) {
 			t.Fatalf("table line width=%d, want %d: %q", got, model.width, line)
 		}
 	}
+}
+
+func TestLatencyTablePreservesLongValuesAndRightAlignsColumns(t *testing.T) {
+	durations := make([]time.Duration, 21)
+	for index := range durations {
+		durations[index] = time.Duration(index+1) * time.Second
+	}
+	summary := latency.Summary{Key: "commandcode-goat/meta/muse-spark-1.3-contributor", Attempts: 40, LogicalRequests: 41, Success: 42, Errors: 43, Durations: durations}
+	table := newLatencyTable([]latency.Summary{summary}, 120)
+	header, row := table.header(), table.row(summary)
+	if strings.Contains(row, "…") {
+		t.Fatalf("unexpected truncated row: %q", row)
+	}
+	for _, column := range []string{"attempts", "logical", "ok", "err", "p50", "p95", "max"} {
+		headerEnd := strings.Index(header, column) + len(column)
+		valueEnd := strings.Index(row, latencyTableValues(summary)[indexOf(latencyMetricHeaders, column)+1]) + len(latencyTableValues(summary)[indexOf(latencyMetricHeaders, column)+1])
+		if headerEnd != valueEnd {
+			t.Fatalf("%s is not right-aligned: header=%q row=%q", column, header, row)
+		}
+	}
+}
+
+func indexOf(values []string, want string) int {
+	for index, value := range values {
+		if value == want {
+			return index
+		}
+	}
+	return -1
 }
 
 func TestFailoverExpandsToFailedAndFailoverRows(t *testing.T) {

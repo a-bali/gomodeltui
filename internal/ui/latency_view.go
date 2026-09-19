@@ -20,14 +20,15 @@ func (m Model) renderLatencyScreen() string {
 	selected := min(m.latencySelected, len(summaries)-1)
 	topRows := latencyListRows(m.height)
 	contentWidth := max(1, m.width-2)
+	table := newLatencyTable(summaries, contentWidth)
 	var list []string
-	list = append(list, mutedStyle.Render(renderLatencyTableHeader(contentWidth))+"  ")
+	list = append(list, mutedStyle.Render(table.header())+strings.Repeat(" ", max(0, m.width-lipgloss.Width(table.header()))))
 	start := min(m.latencyOffset, max(0, len(summaries)-topRows))
 	end := min(len(summaries), start+topRows)
 	thumbStart, thumbEnd := scrollbarThumb(topRows, len(summaries), start)
 	for index := start; index < end; index++ {
 		summary := summaries[index]
-		line := renderLatencyTableRow(summary, contentWidth)
+		line := table.row(summary)
 		line += strings.Repeat(" ", max(0, contentWidth-lipgloss.Width(line)))
 		if index == selected {
 			line = renderSelectedLine(line)
@@ -47,34 +48,53 @@ func (m Model) renderLatencyScreen() string {
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
 }
 
-const latencyMetricWidth = 8
+var latencyMetricHeaders = []string{"attempts", "logical", "ok", "err", "p50", "p95", "max"}
 
-func latencyModelColumnWidth(width int) int {
-	// Seven metric columns and their separators occupy the remainder of the
-	// table; model routing gets every other available terminal column.
-	return max(1, width-(latencyMetricWidth*7)-7)
+type latencyTable struct{ widths []int }
+
+func newLatencyTable(summaries []latency.Summary, availableWidth int) latencyTable {
+	widths := make([]int, len(latencyMetricHeaders)+1)
+	widths[0] = len("provider/model")
+	for index, header := range latencyMetricHeaders {
+		widths[index+1] = len(header)
+	}
+	for _, summary := range summaries {
+		values := latencyTableValues(summary)
+		for index, value := range values {
+			widths[index] = max(widths[index], lipgloss.Width(value))
+		}
+	}
+	used := 2 * (len(widths) - 1)
+	for _, width := range widths {
+		used += width
+	}
+	widths[0] += max(0, availableWidth-used)
+	return latencyTable{widths: widths}
 }
 
-func renderLatencyTableHeader(width int) string {
-	modelWidth := latencyModelColumnWidth(width)
-	line := fmt.Sprintf("%-*s %*s %*s %*s %*s %*s %*s %*s",
-		modelWidth, "provider/model",
-		latencyMetricWidth, "attempts", latencyMetricWidth, "logical",
-		latencyMetricWidth, "ok", latencyMetricWidth, "err",
-		latencyMetricWidth, "p50", latencyMetricWidth, "p95", latencyMetricWidth, "max")
-	return truncateText(line, width)
+func latencyTableValues(summary latency.Summary) []string {
+	return []string{summary.Key,
+		fmt.Sprintf("%d", summary.Attempts), fmt.Sprintf("%d", summary.LogicalRequests),
+		fmt.Sprintf("%d", summary.Success), fmt.Sprintf("%d", summary.Errors),
+		formatLatency(latency.Percentile(summary.Durations, 50)),
+		formatLatency(latency.Percentile(summary.Durations, 95)),
+		formatLatency(maxDuration(summary.Durations))}
 }
 
-func renderLatencyTableRow(summary latency.Summary, width int) string {
-	modelWidth := latencyModelColumnWidth(width)
-	line := fmt.Sprintf("%-*s %*d %*d %*d %*d %*s %*s %*s",
-		modelWidth, truncateText(summary.Key, modelWidth),
-		latencyMetricWidth, summary.Attempts, latencyMetricWidth, summary.LogicalRequests,
-		latencyMetricWidth, summary.Success, latencyMetricWidth, summary.Errors,
-		latencyMetricWidth, formatLatency(latency.Percentile(summary.Durations, 50)),
-		latencyMetricWidth, formatLatency(latency.Percentile(summary.Durations, 95)),
-		latencyMetricWidth, formatLatency(maxDuration(summary.Durations)))
-	return truncateText(line, width)
+func (t latencyTable) header() string {
+	return t.format(append([]string{"provider/model"}, latencyMetricHeaders...))
+}
+
+func (t latencyTable) row(summary latency.Summary) string {
+	return t.format(latencyTableValues(summary))
+}
+
+func (t latencyTable) format(values []string) string {
+	columns := make([]string, len(values))
+	for index, value := range values {
+		columns[index] = fmt.Sprintf("%*s", t.widths[index], value)
+	}
+	return strings.Join(columns, "  ")
 }
 
 func latencyTopRows(height int) int { return max(3, height*40/100) }
