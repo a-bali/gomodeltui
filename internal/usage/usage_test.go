@@ -36,6 +36,15 @@ func TestParseCommandCodeUsage(t *testing.T) {
 	}
 }
 
+func TestCommandCodeCookieHeaderAcceptsBareSessionToken(t *testing.T) {
+	if got := commandCodeCookieHeader("session-token"); got != "__Secure-better-auth.session_token=session-token" {
+		t.Fatalf("header=%q", got)
+	}
+	if got := commandCodeCookieHeader("Cookie: other=value; session=value"); got != "other=value; session=value" {
+		t.Fatalf("header=%q", got)
+	}
+}
+
 func TestParseCodexUsage(t *testing.T) {
 	snapshot, err := parseCodex([]byte(`{"rate_limit":{"primary_window":{"used_percent":20,"reset_at":60},"secondary_window":{"used_percent":30,"reset_at":120}}}`), time.Now())
 	if err != nil || len(snapshot.Windows) != 2 || snapshot.Windows[1].Used != 30 {

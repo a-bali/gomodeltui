@@ -76,11 +76,21 @@ func (f CommandCode) Fetch(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	req.Header.Set("Cookie", f.Cookie)
+	req.Header.Set("Cookie", commandCodeCookieHeader(f.Cookie))
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Origin", "https://commandcode.ai")
 	req.Header.Set("Referer", "https://commandcode.ai/")
 	return fetchJSON(f.Client, req, f.Provider(), "session cookie", parseCommandCode)
+}
+
+func commandCodeCookieHeader(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimSpace(strings.TrimPrefix(value, "Cookie:"))
+	if !strings.Contains(value, "=") && !strings.Contains(value, ";") {
+		// Command Code uses Better Auth's secure production session cookie.
+		return "__Secure-better-auth.session_token=" + value
+	}
+	return value
 }
 
 type Codex struct {
