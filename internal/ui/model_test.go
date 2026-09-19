@@ -13,9 +13,15 @@ import (
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
 	"github.com/balia/gomodeltui/internal/latency"
+	"github.com/balia/gomodeltui/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+type fakeUsageFetcher struct{ snapshot usage.Snapshot }
+
+func (f fakeUsageFetcher) Provider() string                              { return f.snapshot.Provider }
+func (f fakeUsageFetcher) Fetch(context.Context) (usage.Snapshot, error) { return f.snapshot, nil }
 
 func TestCompletedAuditEventFeedsChart(t *testing.T) {
 	at := time.Now().UTC().Truncate(time.Minute)
@@ -348,6 +354,20 @@ func TestMainScreenDividerUsesTerminalWidth(t *testing.T) {
 	model.width, model.height = 79, 20
 	if !strings.Contains(model.View(), strings.Repeat("─", model.width)) {
 		t.Fatalf("full-width divider missing:\n%s", model.View())
+	}
+}
+
+func TestUsageScreenOpensAndDisplaysSnapshots(t *testing.T) {
+	fetcher := fakeUsageFetcher{snapshot: usage.Snapshot{Provider: "OpenCode Go", Source: "API key", Windows: []usage.Window{{Label: "5h", Used: 12.5, ResetsAt: time.Now().Add(time.Hour)}}}}
+	model := NewModel(nil, fetcher)
+	model.width, model.height = 100, 24
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	if !model.usageScreen || !strings.Contains(model.View(), "OpenCode Go: loading") {
+		t.Fatalf("usage screen did not open:\n%s", model.View())
+	}
+	_, _ = model.Update(usageMsg{provider: fetcher.Provider(), snapshot: fetcher.snapshot})
+	if !strings.Contains(model.View(), "12.5% used") || !strings.Contains(model.View(), "API key") {
+		t.Fatalf("usage snapshot did not render:\n%s", model.View())
 	}
 }
 

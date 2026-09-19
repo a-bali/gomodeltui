@@ -13,6 +13,7 @@ import (
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/balia/gomodeltui/internal/gomodel"
 	"github.com/balia/gomodeltui/internal/latency"
+	"github.com/balia/gomodeltui/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -32,6 +33,11 @@ type errMsg struct {
 	connectionID uint64
 }
 type tickMsg time.Time
+type usageMsg struct {
+	provider string
+	snapshot usage.Snapshot
+	err      error
+}
 
 const maxLogItems = 1000
 
@@ -57,6 +63,11 @@ type Model struct {
 	latencyScaleMax time.Duration
 	latencyScaleAt  time.Time
 	latencyBuckets  int
+	usageScreen     bool
+	usageFetchers   []usage.Fetcher
+	usageSnapshots  map[string]usage.Snapshot
+	usageErrors     map[string]string
+	usageRefreshAt  time.Time
 	popup           bool
 	popupLines      []string
 	popupRawLines   []string
@@ -79,8 +90,8 @@ type Model struct {
 	err             string
 }
 
-func NewModel(client *gomodel.Client) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
+func NewModel(client *gomodel.Client, usageFetchers ...usage.Fetcher) *Model {
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, usageFetchers: usageFetchers, usageSnapshots: make(map[string]usage.Snapshot), usageErrors: make(map[string]string), logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -210,6 +221,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencyOffset = latencyListOffset(m.latencySelected, m.latencyOffset, len(summaries), m.height)
 			return m, nil
 		}
+		if m.usageScreen {
+			switch msg.String() {
+			case "u", "esc":
+				m.usageScreen = false
+			case "r":
+				m.usageRefreshAt = time.Now()
+				return m, usageRefreshCmd(m.usageFetchers)
+			}
+			return m, nil
+		}
 		if m.searching {
 			switch msg.String() {
 			case "enter":
@@ -242,6 +263,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencyOffset = 0
 			m.recalculateLatencyScale(time.Now())
 			return m, nil
+		case "u":
+			m.usageScreen = true
+			m.usageRefreshAt = time.Now()
+			return m, usageRefreshCmd(m.usageFetchers)
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
 		case "-":
@@ -384,23 +409,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stream = nil
 		}
 		return m, refreshCmd()
+	case usageMsg:
+		if msg.err != nil {
+			m.usageErrors[msg.provider] = msg.err.Error()
+		} else {
+			m.usageSnapshots[msg.provider] = msg.snapshot
+			delete(m.usageErrors, msg.provider)
+		}
+		return m, nil
 	case tickMsg:
 		if m.latencyScreen && (m.latencyScaleAt.IsZero() || time.Since(m.latencyScaleAt) >= time.Minute) {
 			m.recalculateLatencyScale(time.Time(msg))
+		}
+		var usageCmd tea.Cmd
+		if m.usageScreen && time.Since(m.usageRefreshAt) >= time.Minute {
+			m.usageRefreshAt = time.Time(msg)
+			usageCmd = usageRefreshCmd(m.usageFetchers)
 		}
 		if m.following {
 			m.followPulse = (m.followPulse + 1) % 3
 		}
 		if m.connected || m.connecting {
-			return m, refreshCmd()
+			return m, tea.Batch(refreshCmd(), usageCmd)
 		}
 		if time.Since(m.lastConnectAt) < reconnectInterval {
-			return m, refreshCmd()
+			return m, tea.Batch(refreshCmd(), usageCmd)
 		}
 		m.connecting = true
 		m.lastConnectAt = time.Now()
 		m.connectionID++
-		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd())
+		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd(), usageCmd)
 	}
 	return m, nil
 }
@@ -432,6 +470,9 @@ func (m Model) View() string {
 	if m.latencyScreen {
 		return m.renderLatencyScreen()
 	}
+	if m.usageScreen {
+		return m.renderUsageScreen()
+	}
 	chartHeight := chartAreaHeight(m.height)
 	chartWidth := max(1, m.width)
 	dot := errorStyle.Render("●")
@@ -443,7 +484,7 @@ func (m Model) View() string {
 	if !m.following {
 		followLabel = "follow:off"
 	}
-	keysText := "1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  n next  q quit"
+	keysText := "1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  u usage  n next  q quit"
 	if m.searching {
 		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
 	}

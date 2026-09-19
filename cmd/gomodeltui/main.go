@@ -6,6 +6,7 @@ import (
 	"github.com/balia/gomodeltui/internal/config"
 	"github.com/balia/gomodeltui/internal/gomodel"
 	"github.com/balia/gomodeltui/internal/ui"
+	"github.com/balia/gomodeltui/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -18,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err := tea.NewProgram(ui.NewModel(client), tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(ui.NewModel(client, usage.Available()...), tea.WithAltScreen()).Run(); err != nil {
 		log.Fatal(err)
 	}
 }
