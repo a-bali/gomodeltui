@@ -300,6 +300,14 @@ func TestMainHeaderShowsWindowLegendAndSummary(t *testing.T) {
 	}
 }
 
+func TestMainScreenDividerUsesTerminalWidth(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 79, 20
+	if !strings.Contains(model.View(), strings.Repeat("─", model.width)) {
+		t.Fatalf("full-width divider missing:\n%s", model.View())
+	}
+}
+
 func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)

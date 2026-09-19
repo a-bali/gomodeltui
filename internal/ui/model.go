@@ -433,7 +433,7 @@ func (m Model) View() string {
 		return m.renderLatencyScreen()
 	}
 	chartHeight := chartAreaHeight(m.height)
-	chartWidth := max(10, m.width-2)
+	chartWidth := max(1, m.width)
 	dot := errorStyle.Render("●")
 	if m.connected {
 		dot = successStyle.Render("●")
