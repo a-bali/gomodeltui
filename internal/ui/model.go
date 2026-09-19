@@ -438,16 +438,16 @@ func (m Model) View() string {
 	if m.connected {
 		dot = successStyle.Render("●")
 	}
-	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel TUI") + fmt.Sprintf("  window: %s", windowLabel(m.window))
+	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel")
 	followLabel := "follow:on"
 	if !m.following {
 		followLabel = "follow:off"
 	}
-	keysText := "1-7 window  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  n next  q quit"
+	keysText := "1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  n next  q quit"
 	if m.searching {
 		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
 	}
-	keys := mutedStyle.Render(keysText)
+	keys := mutedStyle.Render(truncateText(keysText, max(1, m.width-lipgloss.Width(left)-1)))
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
 	buckets := m.store.Snapshot(time.Now(), m.window, chartWidth)
@@ -457,7 +457,7 @@ func (m Model) View() string {
 		success += bucket.Success
 		errors += bucket.Errors
 	}
-	chartLegend := successStyle.Render("success") + fmt.Sprintf(" %d  ", success) + errorStyle.Render("errors") + fmt.Sprintf(" %d", errors)
+	chartLegend := fmt.Sprintf("%s: %d ", windowLabel(m.window), success) + successStyle.Render("successful") + fmt.Sprintf(", %d ", errors) + errorStyle.Render("error")
 	logs := m.renderLogs(m.width)
 	if m.popup {
 		return m.renderPopup()
@@ -905,9 +905,18 @@ func responseTimeStyle(duration time.Duration) lipgloss.Style {
 	}
 }
 
-func chartAreaHeight(height int) int    { return max(4, height/3-2) }
-func visibleLogRows(height int) int     { return max(1, height-chartAreaHeight(height)-5) }
-func windowLabel(w chart.Window) string { return (time.Duration(w)).String() }
+func chartAreaHeight(height int) int { return max(4, height/3-2) }
+func visibleLogRows(height int) int  { return max(1, height-chartAreaHeight(height)-5) }
+func windowLabel(w chart.Window) string {
+	switch w {
+	case chart.Window5m:
+		return "5m"
+	case chart.Window15m:
+		return "15m"
+	default:
+		return fmt.Sprintf("%dh", int(time.Duration(w).Hours()))
+	}
+}
 func min(a, b int) int {
 	if a < b {
 		return a

@@ -284,6 +284,22 @@ func TestFiveMinuteWindowShortcut(t *testing.T) {
 	}
 }
 
+func TestMainHeaderShowsWindowLegendAndSummary(t *testing.T) {
+	model := NewModel(nil)
+	model.width, model.height = 160, 30
+	model.window = chart.Window6h
+	view := model.View()
+	if !strings.Contains(view, "GoModel") || strings.Contains(view, "GoModel TUI") {
+		t.Fatalf("unexpected title: %s", view)
+	}
+	if !strings.Contains(view, "1-7 window 5m/15m/1h/3h/6h/12h/24h") {
+		t.Fatalf("window legend missing: %s", view)
+	}
+	if !strings.Contains(view, "6h: 0 successful, 0 error") {
+		t.Fatalf("window summary missing: %s", view)
+	}
+}
+
 func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)
