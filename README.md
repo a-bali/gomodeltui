@@ -41,9 +41,8 @@ The same dotted keys work in every source:
 | `providers.commandcode.cookie` | `PROVIDERS_COMMANDCODE_COOKIE` | `--providers.commandcode.cookie` |
 | `providers.codex.auth_path` | `PROVIDERS_CODEX_AUTH_PATH` | `--providers.codex.auth_path` |
 
-`GOMODEL_TOKEN`, `OPENCODE_API_KEY`, and `COMMANDCODE_COOKIE` remain supported
-as lower-priority compatibility aliases. Restrict the YAML file to its owner
-because it can contain credentials (`chmod 600 ~/.config/gomodeltui/config.yaml`).
+Restrict the YAML file to its owner because it can contain credentials
+(`chmod 600 ~/.config/gomodeltui/config.yaml`).
 
 ## Provider usage
 

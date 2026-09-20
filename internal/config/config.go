@@ -39,8 +39,8 @@ type CodexConfig struct {
 }
 
 type option struct {
-	key, env, legacy string
-	value            *string
+	key, env string
+	value    *string
 }
 
 func Load(args []string, getenv func(string) string) (Config, error) {
@@ -63,8 +63,6 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 	options := optionsFor(&cfg)
 	for _, option := range options {
 		if value := strings.TrimSpace(getenv(option.env)); value != "" {
-			*option.value = value
-		} else if value := strings.TrimSpace(getenv(option.legacy)); option.legacy != "" && value != "" {
 			*option.value = value
 		}
 	}
@@ -103,8 +101,6 @@ Environment mapping:
   PROVIDERS_COMMANDCODE_COOKIE
   PROVIDERS_CODEX_AUTH_PATH
 
-Legacy aliases GOMODEL_TOKEN, OPENCODE_API_KEY, and COMMANDCODE_COOKIE are
-supported with lower priority than the matching variables above.
 `
 }
 
@@ -160,11 +156,11 @@ func readFile(path string, required bool) (Config, error) {
 
 func optionsFor(cfg *Config) []option {
 	return []option{
-		{"gomodel.url", "GOMODEL_URL", "", &cfg.GoModel.URL},
-		{"gomodel.api_key", "GOMODEL_API_KEY", "GOMODEL_TOKEN", &cfg.GoModel.APIKey},
-		{"providers.opencode.api_key", "PROVIDERS_OPENCODE_API_KEY", "OPENCODE_API_KEY", &cfg.Providers.OpenCode.APIKey},
-		{"providers.commandcode.cookie", "PROVIDERS_COMMANDCODE_COOKIE", "COMMANDCODE_COOKIE", &cfg.Providers.CommandCode.Cookie},
-		{"providers.codex.auth_path", "PROVIDERS_CODEX_AUTH_PATH", "", &cfg.Providers.Codex.AuthPath},
+		{"gomodel.url", "GOMODEL_URL", &cfg.GoModel.URL},
+		{"gomodel.api_key", "GOMODEL_API_KEY", &cfg.GoModel.APIKey},
+		{"providers.opencode.api_key", "PROVIDERS_OPENCODE_API_KEY", &cfg.Providers.OpenCode.APIKey},
+		{"providers.commandcode.cookie", "PROVIDERS_COMMANDCODE_COOKIE", &cfg.Providers.CommandCode.Cookie},
+		{"providers.codex.auth_path", "PROVIDERS_CODEX_AUTH_PATH", &cfg.Providers.Codex.AuthPath},
 	}
 }
 

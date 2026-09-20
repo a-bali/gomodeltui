@@ -23,20 +23,20 @@ func TestLoadUsesYAMLThenEnvironmentThenFlags(t *testing.T) {
 	}
 }
 
-func TestLoadSupportsLegacyEnvironmentNames(t *testing.T) {
-	env := map[string]string{"GOMODEL_TOKEN": "legacy-key", "OPENCODE_API_KEY": "legacy-open", "COMMANDCODE_COOKIE": "legacy-cookie"}
-	cfg, err := Load([]string{}, func(key string) string { return env[key] })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.GoModel.APIKey != "legacy-key" || cfg.Providers.OpenCode.APIKey != "legacy-open" || cfg.Providers.CommandCode.Cookie != "legacy-cookie" {
-		t.Fatalf("unexpected config: %+v", cfg)
-	}
-}
-
 func TestLoadRequiresGoModelAPIKey(t *testing.T) {
 	if _, err := validate(Config{}); err == nil {
 		t.Fatal("expected missing API key error")
+	}
+}
+
+func TestLoadDoesNotUseLegacyEnvironmentNames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"GOMODEL_TOKEN": "old-key"}
+	if _, err := Load([]string{"--config=" + path}, func(key string) string { return env[key] }); err == nil {
+		t.Fatal("expected legacy environment variable to be ignored")
 	}
 }
 
