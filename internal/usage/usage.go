@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/balia/gomodeltui/internal/config"
 )
 
 type Window struct {
@@ -32,16 +34,21 @@ type Fetcher interface {
 	Fetch(context.Context) (Snapshot, error)
 }
 
-func Available() []Fetcher {
+func Available(providers config.ProvidersConfig) []Fetcher {
 	var fetchers []Fetcher
-	if key := strings.TrimSpace(os.Getenv("OPENCODE_API_KEY")); key != "" {
+	if key := strings.TrimSpace(providers.OpenCode.APIKey); key != "" {
 		fetchers = append(fetchers, OpenCodeGo{APIKey: key, Client: http.DefaultClient})
 	}
-	if cookie := strings.TrimSpace(os.Getenv("COMMANDCODE_COOKIE")); cookie != "" {
+	if cookie := strings.TrimSpace(providers.CommandCode.Cookie); cookie != "" {
 		fetchers = append(fetchers, CommandCode{Cookie: cookie, Client: http.DefaultClient})
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		path := filepath.Join(home, ".codex", "auth.json")
+	path := providers.Codex.AuthPath
+	if path == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(home, ".codex", "auth.json")
+		}
+	}
+	if path != "" {
 		if _, err := os.Stat(path); err == nil {
 			fetchers = append(fetchers, Codex{AuthPath: path, Client: http.DefaultClient})
 		}
