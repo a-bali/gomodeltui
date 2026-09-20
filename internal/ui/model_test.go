@@ -375,6 +375,14 @@ func TestUsageScreenOpensAndDisplaysSnapshots(t *testing.T) {
 	}
 }
 
+func TestFormatUsageResetShowsDateAndRemainingTime(t *testing.T) {
+	now := time.Date(2026, 9, 20, 10, 0, 0, 0, time.Local)
+	at := now.Add(26*time.Hour + 14*time.Minute)
+	if got := formatUsageReset(at, now); got != "resets 2026-09-21 12:14 (in 1d 2h 14m)" {
+		t.Fatalf("reset=%q", got)
+	}
+}
+
 func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)

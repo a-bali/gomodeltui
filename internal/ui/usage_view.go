@@ -50,17 +50,37 @@ func (m Model) renderUsageScreen() string {
 		for _, window := range snapshot.Windows {
 			reset := "reset unavailable"
 			if !window.ResetsAt.IsZero() {
-				reset = "resets " + window.ResetsAt.Local().Format("2006-01-02 15:04")
+				reset = formatUsageReset(window.ResetsAt, time.Now())
 			}
 			lines = append(lines, fmt.Sprintf("  %-8s %6.1f%% used  %s", window.Label+":", window.Used, mutedStyle.Render(reset)))
 		}
 		if snapshot.Credits != "" {
 			creditLine := snapshot.Credits
 			if !snapshot.CreditResetAt.IsZero() {
-				creditLine += "  resets " + snapshot.CreditResetAt.Local().Format("2006-01-02 15:04")
+				creditLine += "  " + formatUsageReset(snapshot.CreditResetAt, time.Now())
 			}
 			lines = append(lines, "  "+mutedStyle.Render(creditLine))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatUsageReset(at, now time.Time) string {
+	date := "resets " + at.Local().Format("2006-01-02 15:04")
+	remaining := at.Sub(now)
+	if remaining <= 0 {
+		return date + " (overdue)"
+	}
+	minutes := int(remaining.Round(time.Minute).Minutes())
+	days, minutes := minutes/(24*60), minutes%(24*60)
+	hours, minutes := minutes/60, minutes%60
+	parts := make([]string, 0, 3)
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+	}
+	if hours > 0 || days > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+	}
+	parts = append(parts, fmt.Sprintf("%dm", minutes))
+	return date + " (in " + strings.Join(parts, " ") + ")"
 }
