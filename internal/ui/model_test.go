@@ -358,7 +358,7 @@ func TestMainScreenDividerUsesTerminalWidth(t *testing.T) {
 }
 
 func TestUsageScreenOpensAndDisplaysSnapshots(t *testing.T) {
-	fetcher := fakeUsageFetcher{snapshot: usage.Snapshot{Provider: "OpenCode Go", Source: "API key", Windows: []usage.Window{{Label: "5h", Used: 12.5, ResetsAt: time.Now().Add(time.Hour)}}}}
+	fetcher := fakeUsageFetcher{snapshot: usage.Snapshot{Provider: "OpenCode Go", Source: "API key", Windows: []usage.Window{{Label: "5h", Used: 12.5, ResetsAt: time.Date(2026, 9, 21, 12, 6, 0, 0, time.Local)}}}}
 	model := NewModel(nil, fetcher)
 	model.width, model.height = 100, 24
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
@@ -366,7 +366,7 @@ func TestUsageScreenOpensAndDisplaysSnapshots(t *testing.T) {
 		t.Fatalf("usage screen did not open:\n%s", model.View())
 	}
 	_, _ = model.Update(usageMsg{provider: fetcher.Provider(), snapshot: fetcher.snapshot, request: model.usageRequest})
-	if !strings.Contains(model.View(), "12.5% used") || !strings.Contains(model.View(), "API key") {
+	if !strings.Contains(model.View(), "12.5% used") || !strings.Contains(model.View(), "API key") || !strings.Contains(model.View(), "2026-09-21 12:06") {
 		t.Fatalf("usage snapshot did not render:\n%s", model.View())
 	}
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})

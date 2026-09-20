@@ -50,14 +50,14 @@ func (m Model) renderUsageScreen() string {
 		for _, window := range snapshot.Windows {
 			reset := "reset unavailable"
 			if !window.ResetsAt.IsZero() {
-				reset = "resets " + window.ResetsAt.Local().Format("Mon 15:04")
+				reset = "resets " + window.ResetsAt.Local().Format("2006-01-02 15:04")
 			}
 			lines = append(lines, fmt.Sprintf("  %-8s %6.1f%% used  %s", window.Label+":", window.Used, mutedStyle.Render(reset)))
 		}
 		if snapshot.Credits != "" {
 			creditLine := snapshot.Credits
 			if !snapshot.CreditResetAt.IsZero() {
-				creditLine += "  resets " + snapshot.CreditResetAt.Local().Format("Mon 15:04")
+				creditLine += "  resets " + snapshot.CreditResetAt.Local().Format("2006-01-02 15:04")
 			}
 			lines = append(lines, "  "+mutedStyle.Render(creditLine))
 		}
