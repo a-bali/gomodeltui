@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -14,6 +17,10 @@ import (
 func main() {
 	cfg, err := config.Load(os.Args[1:], os.Getenv)
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Print(config.Help())
+			return
+		}
 		log.Fatal(err)
 	}
 	client, err := gomodel.NewClient(cfg.GoModel.URL, cfg.GoModel.APIKey, nil)

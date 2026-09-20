@@ -44,6 +44,11 @@ type option struct {
 }
 
 func Load(args []string, getenv func(string) string) (Config, error) {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return Config{}, flag.ErrHelp
+		}
+	}
 	if getenv == nil {
 		getenv = os.Getenv
 	}
@@ -67,6 +72,40 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return validate(cfg)
+}
+
+func Help() string {
+	return `gomodeltui - read-only GoModel metrics and usage TUI
+
+Usage:
+  gomodeltui [options]
+
+Configuration is loaded in this order (later sources override earlier ones):
+  1. YAML: ~/.config/gomodeltui/config.yaml
+     (or $XDG_CONFIG_HOME/gomodeltui/config.yaml)
+  2. Environment variables
+  3. Command-line options
+
+Options:
+  --config PATH                       YAML configuration file
+  --gomodel.url URL                   GoModel URL (default: http://localhost:8080)
+  --gomodel.api_key KEY               GoModel API key (required)
+  --providers.opencode.api_key KEY    OpenCode Go API key
+  --providers.commandcode.cookie TEXT Command Code Cookie header or session token
+  --providers.codex.auth_path PATH    Codex auth.json path
+  -h, --help                          Show this help
+
+Environment mapping:
+  GOMODELTUI_CONFIG
+  GOMODEL_URL
+  GOMODEL_API_KEY
+  PROVIDERS_OPENCODE_API_KEY
+  PROVIDERS_COMMANDCODE_COOKIE
+  PROVIDERS_CODEX_AUTH_PATH
+
+Legacy aliases GOMODEL_TOKEN, OPENCODE_API_KEY, and COMMANDCODE_COOKIE are
+supported with lower priority than the matching variables above.
+`
 }
 
 func DefaultPath(getenv func(string) string) (string, error) {

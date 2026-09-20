@@ -1,8 +1,10 @@
 package config
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,7 +35,7 @@ func TestLoadSupportsLegacyEnvironmentNames(t *testing.T) {
 }
 
 func TestLoadRequiresGoModelAPIKey(t *testing.T) {
-	if _, err := Load([]string{}, func(string) string { return "" }); err == nil {
+	if _, err := validate(Config{}); err == nil {
 		t.Fatal("expected missing API key error")
 	}
 }
@@ -45,5 +47,14 @@ func TestLoadRejectsUnknownYAMLKey(t *testing.T) {
 	}
 	if _, err := Load([]string{"--config=" + path}, func(string) string { return "" }); err == nil {
 		t.Fatal("expected unknown YAML field error")
+	}
+}
+
+func TestLoadHelpDoesNotRequireConfiguration(t *testing.T) {
+	if _, err := Load([]string{"--help"}, func(string) string { return "" }); err != flag.ErrHelp {
+		t.Fatalf("err=%v, want ErrHelp", err)
+	}
+	if help := Help(); !strings.Contains(help, "--gomodel.url") || !strings.Contains(help, "PROVIDERS_COMMANDCODE_COOKIE") {
+		t.Fatalf("help is missing configuration details:\n%s", help)
 	}
 }
