@@ -87,6 +87,11 @@ func (f CommandCode) Fetch(ctx context.Context) (Snapshot, error) {
 	if err == nil {
 		if subscription, subscriptionErr := fetchJSON(f.Client, subscriptionRequest, f.Provider(), "session cookie", parseCommandSubscription); subscriptionErr == nil {
 			snapshot.CreditResetAt = subscription.CreditResetAt
+			for index := range snapshot.Windows {
+				if snapshot.Windows[index].Label == "monthly" {
+					snapshot.Windows[index].ResetsAt = subscription.CreditResetAt
+				}
+			}
 		}
 	}
 	return snapshot, nil
@@ -280,7 +285,7 @@ func parseCommandCode(raw json.RawMessage, _ time.Time) (Snapshot, error) {
 	}
 	monthly, _ := numberValue(credits["monthlyCredits"])
 	granted, _ := numberValue(credits["monthlyCreditsGranted"])
-	creditText := fmt.Sprintf("$%.2f monthly credits remaining", monthly)
+	windows := []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}
 	if granted > 0 {
 		used := (granted - monthly) * 100 / granted
 		if used < 0 {
@@ -289,9 +294,9 @@ func parseCommandCode(raw json.RawMessage, _ time.Time) (Snapshot, error) {
 		if used > 100 {
 			used = 100
 		}
-		creditText = fmt.Sprintf("monthly credits: %.1f%% used  $%.2f / $%.2f remaining", used, monthly, granted)
+		windows = append(windows, Window{Label: "monthly", Used: used})
 	}
-	return Snapshot{Windows: []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}, Credits: creditText}, nil
+	return Snapshot{Windows: windows}, nil
 }
 
 func parseCommandSubscription(raw json.RawMessage, _ time.Time) (Snapshot, error) {

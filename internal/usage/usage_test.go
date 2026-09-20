@@ -32,7 +32,7 @@ func TestParseOpenCodeUsageUsesAbsoluteResetAndDoesNotInventOne(t *testing.T) {
 
 func TestParseCommandCodeUsage(t *testing.T) {
 	snapshot, err := parseCommandCode([]byte(`{"credits":{"monthlyCredits":12.5,"monthlyCreditsGranted":25},"windowLimits":{"fiveHour":{"used":3,"cap":12,"resetAt":"2026-09-20T12:00:00Z"},"weekly":{"used":1,"cap":4,"resetAt":"2026-09-21T12:00:00Z"}}}`), time.Now())
-	if err != nil || snapshot.Windows[0].Used != 25 || snapshot.Credits != "monthly credits: 50.0% used  $12.50 / $25.00 remaining" {
+	if err != nil || snapshot.Windows[0].Used != 25 || len(snapshot.Windows) != 3 || snapshot.Windows[2].Label != "monthly" || snapshot.Windows[2].Used != 50 {
 		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
 	}
 }
