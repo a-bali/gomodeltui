@@ -37,6 +37,7 @@ type usageMsg struct {
 	provider string
 	snapshot usage.Snapshot
 	err      error
+	request  uint64
 }
 
 const maxLogItems = 1000
@@ -68,6 +69,8 @@ type Model struct {
 	usageSnapshots  map[string]usage.Snapshot
 	usageErrors     map[string]string
 	usageRefreshAt  time.Time
+	usageRequest    uint64
+	usagePending    int
 	popup           bool
 	popupLines      []string
 	popupRawLines   []string
@@ -226,8 +229,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "u", "esc":
 				m.usageScreen = false
 			case "r":
-				m.usageRefreshAt = time.Now()
-				return m, usageRefreshCmd(m.usageFetchers)
+				return m, m.startUsageRefresh(time.Now())
 			}
 			return m, nil
 		}
@@ -265,8 +267,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "u":
 			m.usageScreen = true
-			m.usageRefreshAt = time.Now()
-			return m, usageRefreshCmd(m.usageFetchers)
+			return m, m.startUsageRefresh(time.Now())
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
 		case "-":
@@ -410,12 +411,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, refreshCmd()
 	case usageMsg:
+		if msg.request != m.usageRequest {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.usageErrors[msg.provider] = msg.err.Error()
 		} else {
 			m.usageSnapshots[msg.provider] = msg.snapshot
 			delete(m.usageErrors, msg.provider)
 		}
+		m.usagePending = max(0, m.usagePending-1)
 		return m, nil
 	case tickMsg:
 		if m.latencyScreen && (m.latencyScaleAt.IsZero() || time.Since(m.latencyScaleAt) >= time.Minute) {
@@ -423,8 +428,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		var usageCmd tea.Cmd
 		if m.usageScreen && time.Since(m.usageRefreshAt) >= time.Minute {
-			m.usageRefreshAt = time.Time(msg)
-			usageCmd = usageRefreshCmd(m.usageFetchers)
+			usageCmd = m.startUsageRefresh(time.Time(msg))
 		}
 		if m.following {
 			m.followPulse = (m.followPulse + 1) % 3
@@ -441,6 +445,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd(), usageCmd)
 	}
 	return m, nil
+}
+
+func (m *Model) startUsageRefresh(at time.Time) tea.Cmd {
+	m.usageRefreshAt = at
+	m.usageRequest++
+	m.usagePending = len(m.usageFetchers)
+	return usageRefreshCmd(m.usageFetchers, m.usageRequest)
 }
 
 func (m *Model) recalculateLatencyScale(at time.Time) {

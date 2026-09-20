@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func usageRefreshCmd(fetchers []usage.Fetcher) tea.Cmd {
+func usageRefreshCmd(fetchers []usage.Fetcher, request uint64) tea.Cmd {
 	commands := make([]tea.Cmd, 0, len(fetchers))
 	for _, fetcher := range fetchers {
 		fetcher := fetcher
@@ -19,7 +19,7 @@ func usageRefreshCmd(fetchers []usage.Fetcher) tea.Cmd {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			snapshot, err := fetcher.Fetch(ctx)
-			return usageMsg{provider: fetcher.Provider(), snapshot: snapshot, err: err}
+			return usageMsg{provider: fetcher.Provider(), snapshot: snapshot, err: err, request: request}
 		})
 	}
 	return tea.Batch(commands...)
@@ -33,6 +33,10 @@ func (m Model) renderUsageScreen() string {
 	lines := []string{header, ""}
 	for _, fetcher := range m.usageFetchers {
 		provider := fetcher.Provider()
+		if m.usagePending > 0 {
+			lines = append(lines, mutedStyle.Render(provider+": refreshing…"))
+			continue
+		}
 		if err := m.usageErrors[provider]; err != "" {
 			lines = append(lines, errorStyle.Render(provider+": ")+mutedStyle.Render(err))
 			continue

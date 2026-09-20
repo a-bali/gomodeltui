@@ -362,12 +362,16 @@ func TestUsageScreenOpensAndDisplaysSnapshots(t *testing.T) {
 	model := NewModel(nil, fetcher)
 	model.width, model.height = 100, 24
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
-	if !model.usageScreen || !strings.Contains(model.View(), "OpenCode Go: loading") {
+	if !model.usageScreen || !strings.Contains(model.View(), "OpenCode Go: refreshing") {
 		t.Fatalf("usage screen did not open:\n%s", model.View())
 	}
-	_, _ = model.Update(usageMsg{provider: fetcher.Provider(), snapshot: fetcher.snapshot})
+	_, _ = model.Update(usageMsg{provider: fetcher.Provider(), snapshot: fetcher.snapshot, request: model.usageRequest})
 	if !strings.Contains(model.View(), "12.5% used") || !strings.Contains(model.View(), "API key") {
 		t.Fatalf("usage snapshot did not render:\n%s", model.View())
+	}
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if view := model.View(); !strings.Contains(view, "OpenCode Go: refreshing") || strings.Contains(view, "12.5% used") {
+		t.Fatalf("refresh did not replace stale usage:\n%s", view)
 	}
 }
 
