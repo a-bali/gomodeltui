@@ -279,7 +279,19 @@ func parseCommandCode(raw json.RawMessage, _ time.Time) (Snapshot, error) {
 		return Window{Label: label, Used: used * 100 / cap, ResetsAt: reset}
 	}
 	monthly, _ := numberValue(credits["monthlyCredits"])
-	return Snapshot{Windows: []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}, Credits: fmt.Sprintf("$%.2f monthly credits remaining", monthly)}, nil
+	granted, _ := numberValue(credits["monthlyCreditsGranted"])
+	creditText := fmt.Sprintf("$%.2f monthly credits remaining", monthly)
+	if granted > 0 {
+		used := (granted - monthly) * 100 / granted
+		if used < 0 {
+			used = 0
+		}
+		if used > 100 {
+			used = 100
+		}
+		creditText = fmt.Sprintf("monthly credits: %.1f%% used  $%.2f / $%.2f remaining", used, monthly, granted)
+	}
+	return Snapshot{Windows: []Window{window("5h", limits["fiveHour"]), window("weekly", limits["weekly"])}, Credits: creditText}, nil
 }
 
 func parseCommandSubscription(raw json.RawMessage, _ time.Time) (Snapshot, error) {
