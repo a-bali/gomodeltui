@@ -10,11 +10,20 @@ import (
 
 func TestRenderChartScalesAndPlotsBrailleArea(t *testing.T) {
 	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 20, 5)
-	if !strings.Contains(got, "5 ┤") || !containsBraille(got) {
+	if !strings.Contains(got, "─┤↑") || !containsBraille(got) {
 		t.Fatalf("expected scaled trace:\n%s", got)
 	}
 	if lines := strings.Count(got, "\n"); lines != 5 {
 		t.Fatalf("expected 3 rows, got %d", lines)
+	}
+}
+
+func TestResampleChartBucketsInterpolatesAcrossBraillePixels(t *testing.T) {
+	got := resampleChartBuckets([]chart.Bucket{{Success: 0}, {Success: 4}}, 5)
+	for index, want := range []int{0, 1, 2, 3, 4} {
+		if got[index].Success != want {
+			t.Fatalf("sample %d=%d, want %d", index, got[index].Success, want)
+		}
 	}
 }
 

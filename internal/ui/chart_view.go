@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -27,7 +26,7 @@ var popupSectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color
 var popupKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
 var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
-const chartAxisWidth = 7
+const chartAxisWidth = 3
 
 // renderChart draws a compact btop-inspired Braille area graph. Each terminal
 // cell holds two time slices and four vertical dots, making activity changes
@@ -36,15 +35,10 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
-	axisWidth := 0
-	if width >= chartAxisWidth+1 {
-		axisWidth = chartAxisWidth
-	}
+	axisWidth := min(chartAxisWidth, max(0, width-1))
 	graphWidth := max(1, width-axisWidth)
 	dotWidth := graphWidth * 2
-	if len(buckets) > dotWidth {
-		buckets = buckets[len(buckets)-dotWidth:]
-	}
+	buckets = resampleChartBuckets(buckets, dotWidth)
 	scale := chartScale(chart.MaxTotal(buckets))
 	graph, errors := brailleArea(buckets, graphWidth, height, scale)
 	ticks := map[int]int{0: scale, height - 1: 0}
@@ -54,13 +48,6 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	var lines []string
 	for row := 0; row < height; row++ {
 		var line strings.Builder
-		if axisWidth > 0 {
-			if tick, ok := ticks[row]; ok {
-				line.WriteString(mutedStyle.Render(fmt.Sprintf("%5d ┤", tick)))
-			} else {
-				line.WriteString(mutedStyle.Render("      │"))
-			}
-		}
 		for column, glyph := range graph[row] {
 			if glyph == ' ' {
 				line.WriteByte(' ')
@@ -70,10 +57,61 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 				line.WriteString(successStyle.Render(string(glyph)))
 			}
 		}
+		if axisWidth > 0 {
+			line.WriteString(mutedStyle.Render(chartAxis(ticks, row, axisWidth)))
+		}
 		lines = append(lines, line.String())
 	}
 	lines = append(lines, mutedStyle.Render(strings.Repeat("─", width)))
 	return strings.Join(lines, "\n")
+}
+
+// chartAxis intentionally uses a fixed three-character gutter: tick, axis,
+// and a scale step. The exact dynamic maximum sits in the chart legend.
+func chartAxis(ticks map[int]int, row, width int) string {
+	if width < chartAxisWidth {
+		return strings.Repeat(" ", width)
+	}
+	if value, ok := ticks[row]; ok {
+		step := "0"
+		if value > 0 && row != 0 {
+			step = "½"
+		} else if row == 0 && value > 0 {
+			step = "↑"
+		}
+		return "─┤" + step
+	}
+	return " │ "
+}
+
+func resampleChartBuckets(buckets []chart.Bucket, count int) []chart.Bucket {
+	if count < 1 {
+		return nil
+	}
+	if len(buckets) == 0 {
+		return make([]chart.Bucket, count)
+	}
+	if len(buckets) == count {
+		return buckets
+	}
+	result := make([]chart.Bucket, count)
+	if len(buckets) == 1 {
+		for index := range result {
+			result[index] = buckets[0]
+		}
+		return result
+	}
+	for index := range result {
+		position := float64(index) * float64(len(buckets)-1) / float64(count-1)
+		left := int(math.Floor(position))
+		right := min(len(buckets)-1, left+1)
+		fraction := position - float64(left)
+		result[index] = chart.Bucket{
+			Success: int(math.Round(float64(buckets[left].Success)*(1-fraction) + float64(buckets[right].Success)*fraction)),
+			Errors:  int(math.Round(float64(buckets[left].Errors)*(1-fraction) + float64(buckets[right].Errors)*fraction)),
+		}
+	}
+	return result
 }
 
 func brailleArea(buckets []chart.Bucket, width, height, scale int) ([][]rune, [][]bool) {
