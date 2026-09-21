@@ -8,23 +8,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func TestRenderChartScalesAndStacks(t *testing.T) {
-	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 1, 3)
-	plain := strings.ReplaceAll(got, "\x1b[32m", "")
-	if !strings.Contains(plain, "█") {
-		t.Fatal("expected bar")
+func TestRenderChartScalesAndPlotsTrace(t *testing.T) {
+	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 20, 5)
+	if !strings.Contains(got, "5 ┤") || !strings.Contains(got, "●") {
+		t.Fatalf("expected scaled trace:\n%s", got)
 	}
-	if lines := strings.Count(got, "\n"); lines != 3 {
+	if lines := strings.Count(got, "\n"); lines != 5 {
 		t.Fatalf("expected 3 rows, got %d", lines)
 	}
 }
 
-func TestRenderChartChangesBarWidthWithZoom(t *testing.T) {
-	bucket := chart.Bucket{Success: 1}
-	short := renderChart([]chart.Bucket{bucket, bucket, bucket, bucket, bucket}, 50, 3)
-	long := renderChart(make([]chart.Bucket, 50), 50, 3)
-	if strings.Count(short, "█") <= strings.Count(long, "█") {
-		t.Fatal("short zoom should render wider bars")
+func TestChartScaleRoundsUp(t *testing.T) {
+	for value, want := range map[int]int{1: 1, 2: 2, 3: 5, 11: 20, 51: 100} {
+		if got := chartScale(value); got != want {
+			t.Fatalf("chartScale(%d)=%d, want %d", value, got, want)
+		}
 	}
 }
 

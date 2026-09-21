@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"math"
 	"strings"
 
 	"github.com/balia/gomodeltui/internal/chart"
@@ -25,36 +27,92 @@ var popupSectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color
 var popupKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
 var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
+const chartAxisWidth = 7
+
+// renderChart draws a compact, btop-inspired activity trace. The left scale is
+// calculated from the busiest visible bucket so both quiet and busy periods
+// remain readable.
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
-	if len(buckets) > width {
-		buckets = buckets[len(buckets)-width:]
+	axisWidth := 0
+	if width >= chartAxisWidth+1 {
+		axisWidth = chartAxisWidth
 	}
-	maxTotal := chart.MaxTotal(buckets)
-	barWidth := max(1, width/len(buckets))
+	graphWidth := max(1, width-axisWidth)
+	if len(buckets) > graphWidth {
+		buckets = buckets[len(buckets)-graphWidth:]
+	}
+	scale := chartScale(chart.MaxTotal(buckets))
+	rows := make([]int, len(buckets))
+	for index, bucket := range buckets {
+		level := int(math.Round(float64(bucket.Total()) / float64(scale) * float64(max(1, height-1))))
+		rows[index] = height - 1 - min(height-1, level)
+	}
+	ticks := map[int]int{0: scale, height - 1: 0}
+	if height >= 4 {
+		ticks[(height-1)/2] = scale / 2
+	}
 	var lines []string
-	for row := height; row > 0; row-- {
+	for row := 0; row < height; row++ {
 		var line strings.Builder
-		for _, bucket := range buckets {
-			green := bucket.Success * height / maxTotal
-			red := bucket.Errors * height / maxTotal
-			filled := green + red
+		if axisWidth > 0 {
+			if tick, ok := ticks[row]; ok {
+				line.WriteString(mutedStyle.Render(fmt.Sprintf("%5d ┤", tick)))
+			} else {
+				line.WriteString(mutedStyle.Render("      │"))
+			}
+		}
+		for index, bucket := range buckets {
 			glyph := " "
-			if filled >= row {
-				if row <= red {
-					glyph = errorStyle.Render("█")
-				} else {
-					glyph = successStyle.Render("█")
+			if _, ok := ticks[row]; ok {
+				glyph = mutedStyle.Render("┈")
+			}
+			if rows[index] != row {
+				line.WriteString(glyph)
+				continue
+			}
+			trace := "●"
+			if index > 0 {
+				switch {
+				case rows[index] == rows[index-1]:
+					trace = "─"
+				case rows[index] < rows[index-1]:
+					trace = "╱"
+				default:
+					trace = "╲"
 				}
 			}
-			for index := 0; index < barWidth; index++ {
-				line.WriteString(glyph)
+			if bucket.Errors > 0 {
+				line.WriteString(errorStyle.Render(trace))
+			} else {
+				line.WriteString(successStyle.Render(trace))
+			}
+		}
+		for index := len(buckets); index < graphWidth; index++ {
+			if _, ok := ticks[row]; ok {
+				line.WriteString(mutedStyle.Render("┈"))
+			} else {
+				line.WriteByte(' ')
 			}
 		}
 		lines = append(lines, line.String())
 	}
-	lines = append(lines, strings.Repeat("─", width))
+	lines = append(lines, mutedStyle.Render(strings.Repeat("─", width)))
 	return strings.Join(lines, "\n")
+}
+
+func chartScale(value int) int {
+	if value <= 1 {
+		return 1
+	}
+	power := int(math.Pow10(int(math.Floor(math.Log10(float64(value))))))
+	for _, multiplier := range []int{1, 2, 5, 10} {
+		candidate := multiplier * power
+		if value <= candidate {
+			return candidate
+		}
+	}
+	return 10 * power
 }
