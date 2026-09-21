@@ -29,9 +29,9 @@ var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
 const chartAxisWidth = 7
 
-// renderChart draws a compact, btop-inspired activity trace. The left scale is
-// calculated from the busiest visible bucket so both quiet and busy periods
-// remain readable.
+// renderChart draws a compact btop-inspired Braille area graph. Each terminal
+// cell holds two time slices and four vertical dots, making activity changes
+// legible without falling back to block bars.
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
@@ -41,15 +41,12 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 		axisWidth = chartAxisWidth
 	}
 	graphWidth := max(1, width-axisWidth)
-	if len(buckets) > graphWidth {
-		buckets = buckets[len(buckets)-graphWidth:]
+	dotWidth := graphWidth * 2
+	if len(buckets) > dotWidth {
+		buckets = buckets[len(buckets)-dotWidth:]
 	}
 	scale := chartScale(chart.MaxTotal(buckets))
-	rows := make([]int, len(buckets))
-	for index, bucket := range buckets {
-		level := int(math.Round(float64(bucket.Total()) / float64(scale) * float64(max(1, height-1))))
-		rows[index] = height - 1 - min(height-1, level)
-	}
+	graph, errors := brailleArea(buckets, graphWidth, height, scale)
 	ticks := map[int]int{0: scale, height - 1: 0}
 	if height >= 4 {
 		ticks[(height-1)/2] = scale / 2
@@ -64,43 +61,59 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 				line.WriteString(mutedStyle.Render("      │"))
 			}
 		}
-		for index, bucket := range buckets {
-			glyph := " "
-			if _, ok := ticks[row]; ok {
-				glyph = mutedStyle.Render("┈")
-			}
-			if rows[index] != row {
-				line.WriteString(glyph)
-				continue
-			}
-			trace := "●"
-			if index > 0 {
-				switch {
-				case rows[index] == rows[index-1]:
-					trace = "─"
-				case rows[index] < rows[index-1]:
-					trace = "╱"
-				default:
-					trace = "╲"
-				}
-			}
-			if bucket.Errors > 0 {
-				line.WriteString(errorStyle.Render(trace))
-			} else {
-				line.WriteString(successStyle.Render(trace))
-			}
-		}
-		for index := len(buckets); index < graphWidth; index++ {
-			if _, ok := ticks[row]; ok {
-				line.WriteString(mutedStyle.Render("┈"))
-			} else {
+		for column, glyph := range graph[row] {
+			if glyph == ' ' {
 				line.WriteByte(' ')
+			} else if errors[row][column] {
+				line.WriteString(errorStyle.Render(string(glyph)))
+			} else {
+				line.WriteString(successStyle.Render(string(glyph)))
 			}
 		}
 		lines = append(lines, line.String())
 	}
 	lines = append(lines, mutedStyle.Render(strings.Repeat("─", width)))
 	return strings.Join(lines, "\n")
+}
+
+func brailleArea(buckets []chart.Bucket, width, height, scale int) ([][]rune, [][]bool) {
+	result := make([][]rune, height)
+	errors := make([][]bool, height)
+	bits := make([][]uint8, height)
+	for row := range result {
+		result[row] = make([]rune, width)
+		errors[row] = make([]bool, width)
+		bits[row] = make([]uint8, width)
+	}
+	brailleBits := [2][4]uint8{{1, 2, 4, 64}, {8, 16, 32, 128}}
+	pixelHeight := height * 4
+	for index, bucket := range buckets {
+		column := index / 2
+		if column >= width {
+			break
+		}
+		side := index % 2
+		filled := int(math.Round(float64(bucket.Total()) / float64(scale) * float64(pixelHeight)))
+		filled = min(pixelHeight, filled)
+		for pixel := 0; pixel < filled; pixel++ {
+			fromTop := pixelHeight - 1 - pixel
+			row, dot := fromTop/4, fromTop%4
+			bits[row][column] |= brailleBits[side][dot]
+			if bucket.Errors > 0 {
+				errors[row][column] = true
+			}
+		}
+	}
+	for row := range result {
+		for column, value := range bits[row] {
+			if value != 0 {
+				result[row][column] = rune(0x2800) + rune(value)
+			} else {
+				result[row][column] = ' '
+			}
+		}
+	}
+	return result, errors
 }
 
 func chartScale(value int) int {

@@ -571,7 +571,7 @@ func (m Model) View() string {
 		return m.renderUsageScreen()
 	}
 	chartHeight := chartAreaHeight(m.height)
-	chartWidth := max(1, m.width-chartAxisWidth)
+	chartWidth := max(1, (m.width-chartAxisWidth)*2)
 	dot := errorStyle.Render("●")
 	if m.connected {
 		dot = successStyle.Render("●")
