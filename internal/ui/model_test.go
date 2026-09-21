@@ -388,16 +388,34 @@ func TestFormatUsageResetShowsDateAndRemainingTime(t *testing.T) {
 
 func TestUsageWindowAddsResponsiveProgressBar(t *testing.T) {
 	reset := "resets 2026-09-21 12:06 (in 2h)"
-	wide := renderUsageWindow(100, "5h", 50, reset)
+	wide := renderUsageWindow(100, "5h", 50, reset, usageProgressWidth(100, "5h", reset))
 	if !strings.Contains(wide, "50.0% used") || !strings.Contains(wide, "[") || !strings.Contains(wide, reset) {
 		t.Fatalf("wide usage line missing progress bar or details: %q", wide)
 	}
 	if got := lipgloss.Width(wide); got != 100 {
 		t.Fatalf("wide usage line width=%d, want 100", got)
 	}
-	narrow := renderUsageWindow(45, "5h", 50, reset)
+	narrow := renderUsageWindow(45, "5h", 50, reset, usageProgressWidth(45, "5h", reset))
 	if strings.Contains(narrow, "[") || !strings.Contains(narrow, reset) {
 		t.Fatalf("narrow usage line should retain details without a bar: %q", narrow)
+	}
+}
+
+func TestUsageProgressBarsShareTheMostConstrainedWidth(t *testing.T) {
+	now := time.Date(2026, 9, 21, 10, 0, 0, 0, time.Local)
+	first := fakeUsageFetcher{snapshot: usage.Snapshot{Provider: "First", Windows: []usage.Window{{Label: "5h", ResetsAt: now.Add(time.Hour)}}}}
+	second := fakeUsageFetcher{snapshot: usage.Snapshot{Provider: "Second", Windows: []usage.Window{{Label: "monthly", ResetsAt: now.Add(7 * 24 * time.Hour)}}}}
+	model := NewModel(nil, first, second)
+	model.width = 100
+	model.usageSnapshots[first.Provider()] = first.snapshot
+	model.usageSnapshots[second.Provider()] = second.snapshot
+	got := model.sharedUsageProgressWidth(now)
+	want := min(
+		usageProgressWidth(model.width, "5h", usageWindowReset(first.snapshot.Windows[0], now)),
+		usageProgressWidth(model.width, "monthly", usageWindowReset(second.snapshot.Windows[0], now)),
+	)
+	if got != want {
+		t.Fatalf("shared progress width=%d, want %d", got, want)
 	}
 }
 

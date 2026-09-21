@@ -32,6 +32,8 @@ func (m Model) renderUsageScreen() string {
 	if len(m.usageFetchers) == 0 {
 		return strings.Join([]string{header, "", mutedStyle.Render("No usage account is available. Set OPENCODE_API_KEY or COMMANDCODE_COOKIE, or sign in to Codex locally.")}, "\n")
 	}
+	now := time.Now()
+	progressWidth := m.sharedUsageProgressWidth(now)
 	lines := []string{header, ""}
 	for _, fetcher := range m.usageFetchers {
 		provider := fetcher.Provider()
@@ -50,11 +52,7 @@ func (m Model) renderUsageScreen() string {
 		}
 		lines = append(lines, lipgloss.NewStyle().Bold(true).Render(snapshot.Provider)+mutedStyle.Render("  "+snapshot.Source))
 		for _, window := range snapshot.Windows {
-			reset := "reset unavailable"
-			if !window.ResetsAt.IsZero() {
-				reset = formatUsageReset(window.ResetsAt, time.Now())
-			}
-			lines = append(lines, renderUsageWindow(m.width, window.Label, window.Used, reset))
+			lines = append(lines, renderUsageWindow(m.width, window.Label, window.Used, usageWindowReset(window, now), progressWidth))
 		}
 		if snapshot.Credits != "" {
 			creditLine := snapshot.Credits
@@ -67,16 +65,49 @@ func (m Model) renderUsageScreen() string {
 	return strings.Join(lines, "\n")
 }
 
+// sharedUsageProgressWidth finds one bar width that fits every visible quota
+// row, keeping progress indicators consistently sized across providers.
+func (m Model) sharedUsageProgressWidth(now time.Time) int {
+	shared := 0
+	for _, fetcher := range m.usageFetchers {
+		snapshot, ok := m.usageSnapshots[fetcher.Provider()]
+		if !ok || m.usageErrors[fetcher.Provider()] != "" {
+			continue
+		}
+		for _, window := range snapshot.Windows {
+			available := usageProgressWidth(m.width, window.Label, usageWindowReset(window, now))
+			if shared == 0 || available < shared {
+				shared = available
+			}
+		}
+	}
+	if shared < usageProgressMinWidth {
+		return 0
+	}
+	return shared
+}
+
+func usageWindowReset(window usage.Window, now time.Time) string {
+	if window.ResetsAt.IsZero() {
+		return "reset unavailable"
+	}
+	return formatUsageReset(window.ResetsAt, now)
+}
+
 // renderUsageWindow keeps the textual usage details intact and uses any
 // remaining terminal width for a proportional bar. Narrow terminals retain
 // the compact text-only representation.
-func renderUsageWindow(width int, label string, used float64, reset string) string {
+func renderUsageWindow(width int, label string, used float64, reset string, barWidth int) string {
 	prefix := fmt.Sprintf("  %-8s %6.1f%% used", label+":", used)
-	barWidth := width - lipgloss.Width(prefix) - lipgloss.Width(reset) - 4
 	if barWidth < usageProgressMinWidth {
 		return prefix + "  " + mutedStyle.Render(reset)
 	}
 	return prefix + "  " + usageProgressBar(used, barWidth) + "  " + mutedStyle.Render(reset)
+}
+
+func usageProgressWidth(width int, label, reset string) int {
+	prefix := fmt.Sprintf("  %-8s %6.1f%% used", label+":", 100.0)
+	return width - lipgloss.Width(prefix) - lipgloss.Width(reset) - 4
 }
 
 func usageProgressBar(used float64, width int) string {
