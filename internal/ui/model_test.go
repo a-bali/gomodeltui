@@ -516,20 +516,26 @@ func TestLogHomeAndEndNavigation(t *testing.T) {
 	}
 }
 
-func TestLogRowsAreCappedAndHaveScrollbar(t *testing.T) {
-	model := NewModel(nil)
+func TestLogRowsArePrunedByRetentionAndHaveScrollbar(t *testing.T) {
+	model := NewModelWithRetention(nil, time.Hour)
 	model.width, model.height = 80, 12
-	rows := make([]gomodel.Request, maxLogItems+20)
+	rows := make([]gomodel.Request, 1020)
 	for index := range rows {
 		rows[index].ID = fmt.Sprintf("%d", index)
+		rows[index].Timestamp = time.Now()
 	}
 	model.replaceRequestRows("new", rows)
 	model.selected = len(model.logs) - 1
 	model.logOffset = len(model.logs) - visibleLogRows(model.height)
-	if len(model.logs) != maxLogItems {
-		t.Fatalf("log count=%d, want %d", len(model.logs), maxLogItems)
+	if len(model.logs) != len(rows) {
+		t.Fatalf("log count=%d, want %d", len(model.logs), len(rows))
 	}
-	thumbStart, thumbEnd := scrollbarThumb(10, maxLogItems+20, 1000)
+	model.logs[0].Timestamp = time.Now().Add(-2 * time.Hour)
+	model.prune(time.Now())
+	if len(model.logs) != len(rows)-1 {
+		t.Fatalf("log count after prune=%d, want %d", len(model.logs), len(rows)-1)
+	}
+	thumbStart, thumbEnd := scrollbarThumb(10, len(model.logs), 1000)
 	if thumbEnd <= thumbStart {
 		t.Fatal("missing scrollbar thumb")
 	}

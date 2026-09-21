@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err := tea.NewProgram(ui.NewModel(client, usage.Available(cfg.Providers)...), tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(ui.NewModelWithRetention(client, cfg.Retention(), usage.Available(cfg.Providers)...), tea.WithAltScreen()).Run(); err != nil {
 		log.Fatal(err)
 	}
 }

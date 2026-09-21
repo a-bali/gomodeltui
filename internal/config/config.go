@@ -8,13 +8,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	GoModel   GoModelConfig   `yaml:"gomodel"`
-	Providers ProvidersConfig `yaml:"providers"`
+	LogRetention string          `yaml:"log_retention"`
+	GoModel      GoModelConfig   `yaml:"gomodel"`
+	Providers    ProvidersConfig `yaml:"providers"`
+}
+
+// Retention is the time span kept in the TUI's in-memory request data.
+func (c Config) Retention() time.Duration {
+	retention, _ := time.ParseDuration(c.LogRetention)
+	return retention
 }
 
 type GoModelConfig struct {
@@ -86,6 +94,7 @@ Configuration is loaded in this order (later sources override earlier ones):
 
 Options:
   --config PATH                       YAML configuration file
+  --log_retention DURATION            In-memory history duration (default: 1h)
   --gomodel.url URL                   GoModel URL (default: http://localhost:8080)
   --gomodel.api_key KEY               GoModel API key (required)
   --providers.opencode.api_key KEY    OpenCode Go API key
@@ -95,6 +104,7 @@ Options:
 
 Environment mapping:
   GOMODELTUI_CONFIG
+  LOG_RETENTION
   GOMODEL_URL
   GOMODEL_API_KEY
   PROVIDERS_OPENCODE_API_KEY
@@ -156,6 +166,7 @@ func readFile(path string, required bool) (Config, error) {
 
 func optionsFor(cfg *Config) []option {
 	return []option{
+		{"log_retention", "LOG_RETENTION", &cfg.LogRetention},
 		{"gomodel.url", "GOMODEL_URL", &cfg.GoModel.URL},
 		{"gomodel.api_key", "GOMODEL_API_KEY", &cfg.GoModel.APIKey},
 		{"providers.opencode.api_key", "PROVIDERS_OPENCODE_API_KEY", &cfg.Providers.OpenCode.APIKey},
@@ -176,6 +187,13 @@ func applyFlags(args []string, options []option) error {
 }
 
 func validate(cfg Config) (Config, error) {
+	cfg.LogRetention = strings.TrimSpace(cfg.LogRetention)
+	if cfg.LogRetention == "" {
+		cfg.LogRetention = "1h"
+	}
+	if retention, err := time.ParseDuration(cfg.LogRetention); err != nil || retention <= 0 {
+		return Config{}, fmt.Errorf("log_retention must be a positive duration")
+	}
 	cfg.GoModel.URL = strings.TrimRight(strings.TrimSpace(cfg.GoModel.URL), "/")
 	if cfg.GoModel.URL == "" {
 		cfg.GoModel.URL = "http://localhost:8080"

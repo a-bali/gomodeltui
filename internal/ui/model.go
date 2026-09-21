@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -39,11 +40,14 @@ type usageMsg struct {
 	err      error
 	request  uint64
 }
-
-const maxLogItems = 1000
+type backfillMsg struct {
+	events []gomodel.Event
+	err    error
+}
 
 const (
-	reconnectInterval = 10 * time.Second
+	reconnectInterval   = 10 * time.Second
+	defaultLogRetention = time.Hour
 )
 
 type Model struct {
@@ -54,7 +58,8 @@ type Model struct {
 	window          chart.Window
 	logs            []gomodel.Request
 	logIndex        map[string]int
-	counted         map[string]bool
+	counted         map[string]time.Time
+	logRetention    time.Duration
 	selected        int
 	following       bool
 	followPulse     uint8
@@ -94,11 +99,21 @@ type Model struct {
 }
 
 func NewModel(client *gomodel.Client, usageFetchers ...usage.Fetcher) *Model {
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, usageFetchers: usageFetchers, usageSnapshots: make(map[string]usage.Snapshot), usageErrors: make(map[string]string), logIndex: make(map[string]int), counted: make(map[string]bool), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
+	return NewModelWithRetention(client, defaultLogRetention, usageFetchers...)
+}
+
+func NewModelWithRetention(client *gomodel.Client, retention time.Duration, usageFetchers ...usage.Fetcher) *Model {
+	if retention <= 0 {
+		retention = defaultLogRetention
+	}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, usageFetchers: usageFetchers, usageSnapshots: make(map[string]usage.Snapshot), usageErrors: make(map[string]string), logIndex: make(map[string]int), counted: make(map[string]time.Time), logRetention: retention, following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd())
+	if m.client == nil {
+		return refreshCmd()
+	}
+	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), backfillCmd(m.client, time.Now().Add(-m.logRetention)), refreshCmd())
 }
 
 func refreshCmd() tea.Cmd {
@@ -116,6 +131,13 @@ func connectCmd(client *gomodel.Client, lastID string, connectionID uint64) tea.
 			return errMsg{err: err, connectionID: connectionID}
 		}
 		return connectMsg{response: response.Body, reader: bufio.NewReader(response.Body), connectionID: connectionID}
+	}
+}
+
+func backfillCmd(client *gomodel.Client, start time.Time) tea.Cmd {
+	return func() tea.Msg {
+		events, err := client.AuditLogs(context.Background(), start)
+		return backfillMsg{events: events, err: err}
 	}
 }
 
@@ -296,7 +318,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.logs = nil
 			m.logIndex = make(map[string]int)
-			m.counted = make(map[string]bool)
+			m.counted = make(map[string]time.Time)
 			m.store = chart.NewStore()
 			m.latencyStore = latency.NewStore()
 			m.selected = 0
@@ -377,29 +399,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.event.ID != "" {
 			m.lastEventID = msg.event.ID
 		}
-		{
-			if request, err := m.reducer.Apply(msg.event); err != nil {
-				m.err = err.Error()
-			} else if request != nil {
-				rows := request.LogRows()
-				m.replaceRequestRows(request.ID, rows)
-				terminalEvent := msg.event.Event == "audit.completed" || msg.event.Event == "audit.failed"
-				if (request.Terminal || terminalEvent) && !m.counted[request.ID] {
-					// Chart windows represent when the TUI observed the completed request.
-					// The request timestamp is retained for the log and may lag local time.
-					for _, row := range rows {
-						m.store.Add(time.Now(), row.Success)
-					}
-					m.latencyStore.AddRequest(requestLatencySamples(rows))
-					m.counted[request.ID] = true
-				}
-				if m.following {
-					m.selected = max(0, len(m.logs)-1)
-					m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
-				}
-			}
-		}
+		m.applyEvent(msg.event)
 		return m, readEventCmd(m.reader, m.connectionID)
+	case backfillMsg:
+		if msg.err != nil {
+			m.err = "load audit history: " + msg.err.Error()
+			return m, nil
+		}
+		for _, event := range msg.events {
+			m.applyEvent(event)
+		}
+		sort.SliceStable(m.logs, func(i, j int) bool { return m.logs[i].Timestamp.Before(m.logs[j].Timestamp) })
+		m.rebuildLogIndex()
+		m.prune(time.Now())
+		if m.following {
+			m.selected = max(0, len(m.logs)-1)
+			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+		}
+		return m, nil
 	case errMsg:
 		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
 			return m, nil
@@ -423,6 +440,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.usagePending = max(0, m.usagePending-1)
 		return m, nil
 	case tickMsg:
+		m.prune(time.Time(msg))
 		if m.latencyScreen && (m.latencyScaleAt.IsZero() || time.Since(m.latencyScaleAt) >= time.Minute) {
 			m.recalculateLatencyScale(time.Time(msg))
 		}
@@ -457,6 +475,53 @@ func (m *Model) startUsageRefresh(at time.Time) tea.Cmd {
 func (m *Model) recalculateLatencyScale(at time.Time) {
 	m.latencyScaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
 	m.latencyScaleAt = at
+}
+
+func (m *Model) applyEvent(event gomodel.Event) {
+	request, err := m.reducer.Apply(event)
+	if err != nil {
+		m.err = err.Error()
+		return
+	}
+	if request == nil {
+		return
+	}
+	rows := request.LogRows()
+	m.replaceRequestRows(request.ID, rows)
+	terminalEvent := event.Event == "audit.completed" || event.Event == "audit.failed"
+	if (request.Terminal || terminalEvent) && m.counted[request.ID].IsZero() {
+		for _, row := range rows {
+			m.store.Add(row.TimestampOrNow(), row.Success)
+		}
+		m.latencyStore.AddRequest(requestLatencySamples(rows))
+		m.counted[request.ID] = request.TimestampOrNow()
+	}
+	if m.following {
+		m.selected = max(0, len(m.logs)-1)
+		m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+	}
+}
+
+func (m *Model) prune(now time.Time) {
+	before := now.Add(-m.logRetention)
+	logs := m.logs[:0]
+	for _, row := range m.logs {
+		if !row.TimestampOrNow().Before(before) {
+			logs = append(logs, row)
+		}
+	}
+	m.logs = logs
+	m.selected = min(m.selected, max(0, len(m.logs)-1))
+	m.logOffset = min(m.logOffset, max(0, len(m.logs)-visibleLogRows(m.height)))
+	m.rebuildLogIndex()
+	for id, at := range m.counted {
+		if at.Before(before) {
+			delete(m.counted, id)
+		}
+	}
+	m.reducer.Prune(before)
+	m.store.Prune(before)
+	m.latencyStore.Prune(before)
 }
 
 func requestLatencySamples(rows []gomodel.Request) []latency.Sample {
@@ -853,11 +918,10 @@ func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {
 	}
 	filtered = append(filtered[:start], append(rows, filtered[start:]...)...)
 	m.logs = filtered
-	if excess := len(m.logs) - maxLogItems; excess > 0 {
-		m.logs = m.logs[excess:]
-		m.selected = max(0, m.selected-excess)
-		m.logOffset = max(0, m.logOffset-excess)
-	}
+	m.rebuildLogIndex()
+}
+
+func (m *Model) rebuildLogIndex() {
 	m.logIndex = make(map[string]int)
 	for index, row := range m.logs {
 		if !strings.Contains(row.ID, "/attempt-") {

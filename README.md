@@ -18,6 +18,8 @@ arguments. Later sources override earlier ones. The default file is
 use `--config /path/to/config.yaml` or `GOMODELTUI_CONFIG` to select another file.
 
 ```yaml
+log_retention: 1h
+
 gomodel:
   url: http://localhost:8080
   api_key: your-gomodel-api-key
@@ -35,6 +37,7 @@ The same dotted keys work in every source:
 
 | Key | Environment | Command line |
 | --- | --- | --- |
+| `log_retention` | `LOG_RETENTION` | `--log_retention` |
 | `gomodel.url` | `GOMODEL_URL` | `--gomodel.url` |
 | `gomodel.api_key` | `GOMODEL_API_KEY` | `--gomodel.api_key` |
 | `providers.opencode.api_key` | `PROVIDERS_OPENCODE_API_KEY` | `--providers.opencode.api_key` |

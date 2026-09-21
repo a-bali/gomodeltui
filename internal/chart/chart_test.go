@@ -53,3 +53,14 @@ func TestMaxTotalAndNextWindow(t *testing.T) {
 		t.Fatalf("upper=%v", got)
 	}
 }
+
+func TestStorePrune(t *testing.T) {
+	now := time.Now()
+	store := NewStore()
+	store.Add(now.Add(-2*time.Hour), true)
+	store.Add(now.Add(-30*time.Minute), false)
+	store.Prune(now.Add(-time.Hour))
+	if len(store.events) != 1 || store.events[0].success {
+		t.Fatalf("events=%+v", store.events)
+	}
+}

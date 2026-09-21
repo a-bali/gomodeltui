@@ -67,3 +67,15 @@ func TestHistogramWithMaxUsesProvidedSharedScale(t *testing.T) {
 		t.Fatalf("histogram=%v, expected 1s sample in the second bucket", got)
 	}
 }
+
+func TestStorePrune(t *testing.T) {
+	now := time.Now()
+	store := NewStore()
+	store.AddRequest([]Sample{{Key: "a/m", At: now.Add(-2 * time.Hour), Duration: time.Second}})
+	store.AddRequest([]Sample{{Key: "a/m", At: now.Add(-30 * time.Minute), Duration: 2 * time.Second}})
+	store.Prune(now.Add(-time.Hour))
+	summaries := store.Summaries()
+	if len(summaries) != 1 || summaries[0].Attempts != 1 || summaries[0].LogicalRequests != 1 {
+		t.Fatalf("summaries=%+v", summaries)
+	}
+}

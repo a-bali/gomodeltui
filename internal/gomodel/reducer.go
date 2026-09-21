@@ -113,6 +113,14 @@ type Reducer struct {
 
 func NewReducer() *Reducer { return &Reducer{requests: make(map[string]*Request)} }
 
+func (r *Reducer) Prune(before time.Time) {
+	for id, request := range r.requests {
+		if request.Terminal && request.Timestamp.Before(before) {
+			delete(r.requests, id)
+		}
+	}
+}
+
 func (r *Reducer) Apply(event Event) (*Request, error) {
 	if event.Event == "heartbeat" || event.Event == "" || event.ID == "" && len(event.Data) == 0 {
 		return nil, nil

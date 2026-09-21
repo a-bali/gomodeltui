@@ -2,10 +2,14 @@ package gomodel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -67,4 +71,65 @@ func (c *Client) LiveLogs(ctx context.Context, lastEventID string) (*http.Respon
 		headers.Set("Last-Event-ID", lastEventID)
 	}
 	return c.do(ctx, "/admin/live/logs", headers)
+}
+
+// AuditLogs returns persisted, completed audit entries at or after start.
+// GoModel's date filters operate on whole days, so timestamps are filtered
+// locally as well to honour the caller's exact retention window.
+func (c *Client) AuditLogs(ctx context.Context, start time.Time) ([]Event, error) {
+	query := url.Values{
+		"start_date": {start.Format("2006-01-02")},
+		"end_date":   {time.Now().Format("2006-01-02")},
+		"limit":      {"100"},
+	}
+	var events []Event
+	for offset := 0; ; {
+		query.Set("offset", strconv.Itoa(offset))
+		resp, err := c.do(ctx, "/admin/audit/log?"+query.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Entries []json.RawMessage `json:"entries"`
+			Total   int               `json:"total"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&page)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("decode GoModel audit log: %w", err)
+		}
+		for _, entry := range page.Entries {
+			event, timestamp, err := auditLogEvent(entry)
+			if err != nil {
+				return nil, err
+			}
+			if !timestamp.Before(start) {
+				events = append(events, event)
+			}
+		}
+		offset += len(page.Entries)
+		if len(page.Entries) == 0 || offset >= page.Total {
+			return events, nil
+		}
+	}
+}
+
+func auditLogEvent(entry json.RawMessage) (Event, time.Time, error) {
+	var header struct {
+		RequestID string    `json:"request_id"`
+		Timestamp time.Time `json:"timestamp"`
+	}
+	if err := json.Unmarshal(entry, &header); err != nil {
+		return Event{}, time.Time{}, fmt.Errorf("decode GoModel audit entry: %w", err)
+	}
+	payload, err := json.Marshal(struct {
+		RequestID string          `json:"request_id"`
+		Timestamp string          `json:"timestamp"`
+		Type      string          `json:"type"`
+		Data      json.RawMessage `json:"data"`
+	}{header.RequestID, header.Timestamp.Format(time.RFC3339Nano), "audit.completed", entry})
+	if err != nil {
+		return Event{}, time.Time{}, fmt.Errorf("encode GoModel audit entry: %w", err)
+	}
+	return Event{Event: "audit.completed", Data: payload}, header.Timestamp, nil
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadUsesYAMLThenEnvironmentThenFlags(t *testing.T) {
@@ -13,13 +14,26 @@ func TestLoadUsesYAMLThenEnvironmentThenFlags(t *testing.T) {
 	if err := os.WriteFile(path, []byte("gomodel:\n  url: https://yaml.example/\n  api_key: yaml-key\nproviders:\n  opencode:\n    api_key: yaml-open\n  commandcode:\n    cookie: yaml-cookie\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{"GOMODEL_API_KEY": "env-key", "PROVIDERS_OPENCODE_API_KEY": "env-open"}
-	cfg, err := Load([]string{"--config", path, "--gomodel.url=https://flag.example/", "--providers.commandcode.cookie=flag-cookie"}, func(key string) string { return env[key] })
+	env := map[string]string{"GOMODEL_API_KEY": "env-key", "PROVIDERS_OPENCODE_API_KEY": "env-open", "LOG_RETENTION": "2h"}
+	cfg, err := Load([]string{"--config", path, "--gomodel.url=https://flag.example/", "--providers.commandcode.cookie=flag-cookie", "--log_retention=3h"}, func(key string) string { return env[key] })
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.GoModel.URL != "https://flag.example" || cfg.GoModel.APIKey != "env-key" || cfg.Providers.OpenCode.APIKey != "env-open" || cfg.Providers.CommandCode.Cookie != "flag-cookie" {
 		t.Fatalf("unexpected config: %+v", cfg)
+	}
+	if got := cfg.Retention(); got != 3*time.Hour {
+		t.Fatalf("retention=%s, want 3h", got)
+	}
+}
+
+func TestLoadDefaultsAndValidatesLogRetention(t *testing.T) {
+	cfg, err := validate(Config{GoModel: GoModelConfig{APIKey: "key"}})
+	if err != nil || cfg.Retention() != time.Hour {
+		t.Fatalf("default retention: config=%+v err=%v", cfg, err)
+	}
+	if _, err := validate(Config{LogRetention: "never", GoModel: GoModelConfig{APIKey: "key"}}); err == nil {
+		t.Fatal("expected invalid retention error")
 	}
 }
 

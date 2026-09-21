@@ -26,6 +26,12 @@ type Summary struct {
 type Store struct {
 	samples  []Sample
 	requests map[string]int
+	logical  []logicalRequest
+}
+
+type logicalRequest struct {
+	at   time.Time
+	keys []string
 }
 
 func NewStore() *Store {
@@ -44,9 +50,40 @@ func (s *Store) AddRequest(samples []Sample) {
 		s.samples = append(s.samples, sample)
 		seen[sample.Key] = true
 	}
+	keys := make([]string, 0, len(seen))
+	var at time.Time
+	for _, sample := range samples {
+		if sample.At.After(at) {
+			at = sample.At
+		}
+	}
 	for key := range seen {
 		s.requests[key]++
+		keys = append(keys, key)
 	}
+	s.logical = append(s.logical, logicalRequest{at: at, keys: keys})
+}
+
+func (s *Store) Prune(before time.Time) {
+	samples := s.samples[:0]
+	for _, sample := range s.samples {
+		if !sample.At.Before(before) {
+			samples = append(samples, sample)
+		}
+	}
+	s.samples = samples
+	s.requests = make(map[string]int)
+	logical := s.logical[:0]
+	for _, request := range s.logical {
+		if request.at.Before(before) {
+			continue
+		}
+		logical = append(logical, request)
+		for _, key := range request.keys {
+			s.requests[key]++
+		}
+	}
+	s.logical = logical
 }
 
 func (s *Store) Summaries() []Summary {

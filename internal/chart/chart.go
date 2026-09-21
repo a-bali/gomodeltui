@@ -42,6 +42,16 @@ func (s *Store) Add(at time.Time, success bool) {
 	s.events = append(s.events, event{at: at, success: success})
 }
 
+func (s *Store) Prune(before time.Time) {
+	kept := s.events[:0]
+	for _, event := range s.events {
+		if !event.at.Before(before) {
+			kept = append(kept, event)
+		}
+	}
+	s.events = kept
+}
+
 // Snapshot returns exactly columns time buckets when columns is provided.
 // With no column count it retains the historical one-minute resolution.
 func (s *Store) Snapshot(now time.Time, window Window, columns ...int) []Bucket {
