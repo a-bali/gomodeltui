@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/charmbracelet/lipgloss"
@@ -37,10 +39,11 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	}
 	axisWidth := min(chartAxisWidth, max(0, width-1))
 	graphWidth := max(1, width-axisWidth)
-	dotWidth := graphWidth * 2
-	buckets = resampleChartBuckets(buckets, dotWidth)
+	if len(buckets) > graphWidth {
+		buckets = buckets[len(buckets)-graphWidth:]
+	}
 	scale := chartScale(chart.MaxTotal(buckets))
-	graph, errors := brailleArea(buckets, graphWidth, height, scale)
+	graph, errors := brailleArea(expandChartBuckets(buckets), graphWidth, height, scale)
 	ticks := map[int]int{0: scale, height - 1: 0}
 	if height >= 4 {
 		ticks[(height-1)/2] = scale / 2
@@ -66,6 +69,14 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
+func expandChartBuckets(buckets []chart.Bucket) []chart.Bucket {
+	result := make([]chart.Bucket, 0, len(buckets)*2)
+	for _, bucket := range buckets {
+		result = append(result, bucket, bucket)
+	}
+	return result
+}
+
 // chartAxis intentionally uses a fixed three-character gutter: tick, axis,
 // and a numeric scale step. The exact dynamic maximum sits in the chart legend.
 func chartAxis(ticks map[int]int, row, width int) string {
@@ -82,36 +93,6 @@ func chartAxis(ticks map[int]int, row, width int) string {
 		return "─┤" + step
 	}
 	return " │ "
-}
-
-func resampleChartBuckets(buckets []chart.Bucket, count int) []chart.Bucket {
-	if count < 1 {
-		return nil
-	}
-	if len(buckets) == 0 {
-		return make([]chart.Bucket, count)
-	}
-	if len(buckets) == count {
-		return buckets
-	}
-	result := make([]chart.Bucket, count)
-	if len(buckets) == 1 {
-		for index := range result {
-			result[index] = buckets[0]
-		}
-		return result
-	}
-	for index := range result {
-		position := float64(index) * float64(len(buckets)-1) / float64(count-1)
-		left := int(math.Floor(position))
-		right := min(len(buckets)-1, left+1)
-		fraction := position - float64(left)
-		result[index] = chart.Bucket{
-			Success: int(math.Round(float64(buckets[left].Success)*(1-fraction) + float64(buckets[right].Success)*fraction)),
-			Errors:  int(math.Round(float64(buckets[left].Errors)*(1-fraction) + float64(buckets[right].Errors)*fraction)),
-		}
-	}
-	return result
 }
 
 func brailleArea(buckets []chart.Bucket, width, height, scale int) ([][]rune, [][]bool) {
@@ -166,4 +147,14 @@ func chartScale(value int) int {
 		}
 	}
 	return 10 * power
+}
+
+func formatChartBin(duration time.Duration) string {
+	if duration >= time.Hour {
+		return fmt.Sprintf("%dh", int(duration/time.Hour))
+	}
+	if duration >= time.Minute {
+		return fmt.Sprintf("%dm", int(duration/time.Minute))
+	}
+	return fmt.Sprintf("%ds", max(1, int(duration/time.Second)))
 }

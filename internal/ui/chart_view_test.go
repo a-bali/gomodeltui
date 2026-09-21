@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/balia/gomodeltui/internal/chart"
 	"github.com/charmbracelet/lipgloss"
@@ -18,12 +19,18 @@ func TestRenderChartScalesAndPlotsBrailleArea(t *testing.T) {
 	}
 }
 
-func TestResampleChartBucketsInterpolatesAcrossBraillePixels(t *testing.T) {
-	got := resampleChartBuckets([]chart.Bucket{{Success: 0}, {Success: 4}}, 5)
-	for index, want := range []int{0, 1, 2, 3, 4} {
-		if got[index].Success != want {
-			t.Fatalf("sample %d=%d, want %d", index, got[index].Success, want)
+func TestFormatChartBin(t *testing.T) {
+	for duration, want := range map[time.Duration]string{12 * time.Second: "12s", 5 * time.Minute: "5m", 2 * time.Hour: "2h"} {
+		if got := formatChartBin(duration); got != want {
+			t.Fatalf("formatChartBin(%s)=%q, want %q", duration, got, want)
 		}
+	}
+}
+
+func TestExpandChartBucketsUsesBothBrailleColumnsForOneTimeBin(t *testing.T) {
+	got := expandChartBuckets([]chart.Bucket{{Success: 3}})
+	if len(got) != 2 || got[0].Success != 3 || got[1].Success != 3 {
+		t.Fatalf("expanded buckets=%+v", got)
 	}
 }
 

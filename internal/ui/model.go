@@ -571,7 +571,7 @@ func (m Model) View() string {
 		return m.renderUsageScreen()
 	}
 	chartHeight := chartAreaHeight(m.height)
-	chartWidth := min(60, max(1, m.width-chartAxisWidth))
+	chartWidth := max(1, m.width-chartAxisWidth)
 	dot := errorStyle.Render("●")
 	if m.connected {
 		dot = successStyle.Render("●")
@@ -595,7 +595,8 @@ func (m Model) View() string {
 		success += bucket.Success
 		errors += bucket.Errors
 	}
-	chartLegend := fmt.Sprintf("%s: %d ", windowLabel(m.window), success) + successStyle.Render("successful") + fmt.Sprintf(", %d ", errors) + errorStyle.Render("error") + mutedStyle.Render(fmt.Sprintf("  scale: %d req/bucket", chartScale(chart.MaxTotal(buckets))))
+	binDuration := time.Duration(m.window) / time.Duration(chartWidth)
+	chartLegend := fmt.Sprintf("%s: %d ", windowLabel(m.window), success) + successStyle.Render("successful") + fmt.Sprintf(", %d ", errors) + errorStyle.Render("error") + mutedStyle.Render(fmt.Sprintf("  x: %s/bin  y: 0–%d requests/bin", formatChartBin(binDuration), chartScale(chart.MaxTotal(buckets))))
 	logs := m.renderLogs(m.width)
 	if m.popup {
 		return m.renderPopup()
