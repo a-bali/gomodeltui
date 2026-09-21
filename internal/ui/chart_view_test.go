@@ -36,6 +36,15 @@ func TestFormatChartBin(t *testing.T) {
 	}
 }
 
+func TestRenderChartXAxisShowsStartMidpointAndNow(t *testing.T) {
+	got := renderChartXAxis(30, 4, 6*time.Hour)
+	for _, want := range []string{"-6h", "-3h", "now"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("x axis %q missing %q", got, want)
+		}
+	}
+}
+
 func TestExpandChartBucketsUsesBothBrailleColumnsForOneTimeBin(t *testing.T) {
 	got := expandChartBuckets([]chart.Bucket{{Success: 3}})
 	if len(got) != 2 || got[0].Success != 3 || got[1].Success != 3 {

@@ -344,8 +344,11 @@ func TestMainHeaderShowsWindowLegendAndSummary(t *testing.T) {
 	if !strings.Contains(view, "1-7 window 5m/15m/1h/3h/6h/12h/24h") {
 		t.Fatalf("window legend missing: %s", view)
 	}
-	if !strings.Contains(view, "6h: 0 successful, 0 error") {
+	if !strings.Contains(view, "[6h: ✅ 0 / 🚫 0]") {
 		t.Fatalf("window summary missing: %s", view)
+	}
+	if strings.Contains(view, "successful") || strings.Contains(view, "requests/bin") {
+		t.Fatalf("obsolete second-row legend remains: %s", view)
 	}
 }
 

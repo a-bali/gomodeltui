@@ -582,31 +582,29 @@ func (m Model) View() string {
 		}
 		axisWidth = nextAxisWidth
 	}
-	chartWidth := max(1, m.width-axisWidth)
-	dot := errorStyle.Render("●")
-	if m.connected {
-		dot = successStyle.Render("●")
-	}
-	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel")
-	followLabel := "follow:on"
-	if !m.following {
-		followLabel = "follow:off"
-	}
-	keysText := "1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓/PgUp/PgDn select  Enter JSON  / search  l latency  u usage  n next  q quit"
-	if m.searching {
-		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
-	}
-	keys := mutedStyle.Render(truncateText(keysText, max(1, m.width-lipgloss.Width(left)-1)))
-	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
-	header := left + gap + keys
-	chartText := renderChart(buckets, m.width, chartHeight)
 	var success, errors int
 	for _, bucket := range buckets {
 		success += bucket.Success
 		errors += bucket.Errors
 	}
-	binDuration := time.Duration(m.window) / time.Duration(chartWidth)
-	chartLegend := fmt.Sprintf("%s: %d ", windowLabel(m.window), success) + successStyle.Render("successful") + fmt.Sprintf(", %d ", errors) + errorStyle.Render("error") + mutedStyle.Render(fmt.Sprintf("  x: %s/bin  y: 0–%d requests/bin", formatChartBin(binDuration), chartScale(chart.MaxTotal(buckets))))
+	dot := errorStyle.Render("●")
+	if m.connected {
+		dot = successStyle.Render("●")
+	}
+	summary := fmt.Sprintf("[%s: ✅ %d / 🚫 %d]", windowLabel(m.window), success, errors)
+	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel") + " " + summary
+	followLabel := "follow:on"
+	if !m.following {
+		followLabel = "follow:off"
+	}
+	keysText := chartHeaderLegend(max(0, m.width-lipgloss.Width(left)-1), followLabel)
+	if m.searching {
+		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
+	}
+	keys := mutedStyle.Render(truncateText(keysText, max(0, m.width-lipgloss.Width(left)-1)))
+	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
+	header := left + gap + keys
+	chartText := renderChart(buckets, m.width, chartHeight) + "\n" + renderChartXAxis(m.width, axisWidth, time.Duration(m.window))
 	logs := m.renderLogs(m.width)
 	if m.popup {
 		return m.renderPopup()
@@ -615,7 +613,21 @@ func (m Model) View() string {
 	if m.following {
 		footer = mutedStyle.Render(strings.Repeat(".", int(m.followPulse)+1))
 	}
-	return strings.Join([]string{header, chartLegend, chartText, logs, footer}, "\n")
+	return strings.Join([]string{header, chartText, logs, footer}, "\n")
+}
+
+func chartHeaderLegend(width int, followLabel string) string {
+	for _, candidate := range []string{
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  l latency  u usage  q quit",
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  l latency  u usage",
+		"1-7 window  +/- zoom  l latency  u usage",
+		"1-7 window",
+	} {
+		if lipgloss.Width(candidate) <= width {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func (m Model) renderLogs(width int) string {

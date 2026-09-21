@@ -156,3 +156,40 @@ func formatChartBin(duration time.Duration) string {
 	}
 	return fmt.Sprintf("%ds", max(1, int(duration/time.Second)))
 }
+
+func renderChartXAxis(width, axisWidth int, window time.Duration) string {
+	graphWidth := max(1, width-axisWidth)
+	line := make([]rune, graphWidth)
+	for index := range line {
+		line[index] = ' '
+	}
+	labels := []struct {
+		text  string
+		start int
+	}{
+		{formatChartOffset(window), 0},
+		{formatChartOffset(window / 2), max(0, (graphWidth-len(formatChartOffset(window/2)))/2)},
+		{"now", max(0, graphWidth-len("now"))},
+	}
+	for _, label := range labels {
+		if label.start+len(label.text) > graphWidth {
+			continue
+		}
+		for index, char := range label.text {
+			if line[label.start+index] == ' ' {
+				line[label.start+index] = char
+			}
+		}
+	}
+	return mutedStyle.Render(string(line) + strings.Repeat(" ", max(0, axisWidth)))
+}
+
+func formatChartOffset(duration time.Duration) string {
+	if duration >= time.Hour {
+		return fmt.Sprintf("-%dh", int(duration/time.Hour))
+	}
+	if duration >= time.Minute {
+		return fmt.Sprintf("-%dm", int(duration/time.Minute))
+	}
+	return fmt.Sprintf("-%ds", max(1, int(duration/time.Second)))
+}
