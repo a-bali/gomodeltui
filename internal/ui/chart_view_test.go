@@ -11,11 +11,20 @@ import (
 
 func TestRenderChartScalesAndPlotsBrailleArea(t *testing.T) {
 	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 20, 5)
-	if !strings.Contains(got, "─┤2") || !containsBraille(got) {
+	if !strings.Contains(got, "─┤5") || !containsBraille(got) {
 		t.Fatalf("expected scaled trace:\n%s", got)
 	}
 	if lines := strings.Count(got, "\n"); lines != 5 {
 		t.Fatalf("expected 3 rows, got %d", lines)
+	}
+}
+
+func TestChartAxisExpandsForActualRequestValues(t *testing.T) {
+	if got := chartAxisWidth(50); got != 4 {
+		t.Fatalf("axis width=%d, want 4", got)
+	}
+	if got := chartAxis(map[int]int{0: 50}, 0, 4); got != "─┤50" {
+		t.Fatalf("axis=%q", got)
 	}
 }
 

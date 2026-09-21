@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ var popupSectionStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color
 var popupKeyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
 var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
-const chartAxisWidth = 3
+const chartAxisMinimumWidth = 3
 
 // renderChart draws a compact btop-inspired Braille area graph. Each terminal
 // cell holds two time slices and four vertical dots, making activity changes
@@ -37,12 +38,12 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
-	axisWidth := min(chartAxisWidth, max(0, width-1))
+	scale := chartScale(chart.MaxTotal(buckets))
+	axisWidth := min(chartAxisWidth(scale), max(0, width-1))
 	graphWidth := max(1, width-axisWidth)
 	if len(buckets) > graphWidth {
 		buckets = buckets[len(buckets)-graphWidth:]
 	}
-	scale := chartScale(chart.MaxTotal(buckets))
 	graph, errors := brailleArea(expandChartBuckets(buckets), graphWidth, height, scale)
 	ticks := map[int]int{0: scale, height - 1: 0}
 	if height >= 4 {
@@ -77,22 +78,19 @@ func expandChartBuckets(buckets []chart.Bucket) []chart.Bucket {
 	return result
 }
 
-// chartAxis intentionally uses a fixed three-character gutter: tick, axis,
-// and a numeric scale step. The exact dynamic maximum sits in the chart legend.
+func chartAxisWidth(scale int) int {
+	return max(chartAxisMinimumWidth, 2+len(strconv.Itoa(scale)))
+}
+
+// chartAxis uses a tick, an axis, and an actual request-count value.
 func chartAxis(ticks map[int]int, row, width int) string {
-	if width < chartAxisWidth {
+	if width < chartAxisMinimumWidth {
 		return strings.Repeat(" ", width)
 	}
-	if _, ok := ticks[row]; ok {
-		step := "1"
-		if row == 0 {
-			step = "2"
-		} else if ticks[row] == 0 {
-			step = "0"
-		}
-		return "─┤" + step
+	if value, ok := ticks[row]; ok {
+		return fmt.Sprintf("─┤%*d", width-2, value)
 	}
-	return " │ "
+	return " │" + strings.Repeat(" ", width-2)
 }
 
 func brailleArea(buckets []chart.Bucket, width, height, scale int) ([][]rune, [][]bool) {

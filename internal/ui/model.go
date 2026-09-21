@@ -571,7 +571,18 @@ func (m Model) View() string {
 		return m.renderUsageScreen()
 	}
 	chartHeight := chartAreaHeight(m.height)
-	chartWidth := max(1, m.width-chartAxisWidth)
+	axisWidth := chartAxisMinimumWidth
+	var buckets []chart.Bucket
+	for range 3 {
+		chartWidth := max(1, m.width-axisWidth)
+		buckets = m.store.Snapshot(time.Now(), m.window, chartWidth)
+		nextAxisWidth := chartAxisWidth(chartScale(chart.MaxTotal(buckets)))
+		if nextAxisWidth == axisWidth {
+			break
+		}
+		axisWidth = nextAxisWidth
+	}
+	chartWidth := max(1, m.width-axisWidth)
 	dot := errorStyle.Render("●")
 	if m.connected {
 		dot = successStyle.Render("●")
@@ -588,7 +599,6 @@ func (m Model) View() string {
 	keys := mutedStyle.Render(truncateText(keysText, max(1, m.width-lipgloss.Width(left)-1)))
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
-	buckets := m.store.Snapshot(time.Now(), m.window, chartWidth)
 	chartText := renderChart(buckets, m.width, chartHeight)
 	var success, errors int
 	for _, bucket := range buckets {
