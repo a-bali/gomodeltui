@@ -20,7 +20,7 @@ func TestAuditLogsLoadsPagesAndFiltersExactRetention(t *testing.T) {
 		}
 		offsets = append(offsets, r.URL.Query().Get("offset"))
 		if r.URL.Query().Get("offset") == "0" {
-			_, _ = w.Write([]byte(`{"entries":[{"request_id":"old","timestamp":"2026-09-20T11:29:59Z"},{"request_id":"new","timestamp":"2026-09-20T11:30:00Z","status_code":200}],"total":2,"limit":100,"offset":0}`))
+			_, _ = w.Write([]byte(`{"entries":[{"id":"audit-old","request_id":"old","timestamp":"2026-09-20T11:29:59Z"},{"id":"audit-new","request_id":"new","timestamp":"2026-09-20T11:30:00Z","status_code":200}],"total":2,"limit":100,"offset":0}`))
 			return
 		}
 		_, _ = w.Write([]byte(`{"entries":[],"total":2,"limit":100,"offset":2}`))
@@ -39,7 +39,7 @@ func TestAuditLogsLoadsPagesAndFiltersExactRetention(t *testing.T) {
 		t.Fatalf("events=%+v", events)
 	}
 	request, err := NewReducer().Apply(events[0])
-	if err != nil || request == nil || request.ID != "new" || !request.Success {
+	if err != nil || request == nil || request.ID != "new" || request.AuditLogID != "audit-new" || !request.Success {
 		t.Fatalf("request=%+v err=%v", request, err)
 	}
 	if len(offsets) != 1 || offsets[0] != "0" {
@@ -52,7 +52,7 @@ func TestAuditLogDetailReturnsCompleteEntry(t *testing.T) {
 		if r.URL.Path != "/admin/audit/detail" || r.URL.Query().Get("log_id") != "req-1" {
 			t.Fatalf("request=%s", r.URL)
 		}
-		_, _ = w.Write([]byte(`{"request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"hello"}]}}}`))
+		_, _ = w.Write([]byte(`{"id":"audit-1","request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"hello"}]}}}`))
 	}))
 	defer server.Close()
 	client, err := NewClient(server.URL, "token", server.Client())
@@ -64,7 +64,7 @@ func TestAuditLogDetailReturnsCompleteEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	request, err := NewReducer().Apply(event)
-	if err != nil || request == nil || request.ID != "req-1" {
+	if err != nil || request == nil || request.ID != "req-1" || request.AuditLogID != "audit-1" {
 		t.Fatalf("request=%+v err=%v", request, err)
 	}
 }

@@ -91,6 +91,7 @@ type Model struct {
 	popupAll        bool
 	popupOffset     int
 	popupRequestID  string
+	popupAuditLogID string
 	popupLoading    bool
 	popupLoadError  string
 	searching       bool
@@ -150,9 +151,9 @@ func backfillCmd(client *gomodel.Client, start time.Time) tea.Cmd {
 	}
 }
 
-func auditDetailCmd(client *gomodel.Client, requestID string) tea.Cmd {
+func auditDetailCmd(client *gomodel.Client, auditLogID, requestID string) tea.Cmd {
 	return func() tea.Msg {
-		event, err := client.AuditLogDetail(context.Background(), requestID)
+		event, err := client.AuditLogDetail(context.Background(), auditLogID)
 		return auditDetailMsg{requestID: requestID, event: event, err: err}
 	}
 }
@@ -371,9 +372,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.logs) > 0 && m.selected < len(m.logs) {
 				request := m.logs[m.selected]
 				m.openPopup(request)
-				if m.client != nil && bodiesOmitted(request.RawJSON) {
+				if m.client != nil && m.popupAuditLogID != "" && bodiesOmitted(request.RawJSON) {
 					m.popupLoading = true
-					return m, auditDetailCmd(m.client, m.popupRequestID)
+					return m, auditDetailCmd(m.client, m.popupAuditLogID, m.popupRequestID)
 				}
 			}
 		case "r":
@@ -738,6 +739,7 @@ func (m *Model) openPopup(request gomodel.Request) {
 	m.popupLoading = false
 	m.popupLoadError = ""
 	m.popupRequestID = logicalRequestID(request.ID)
+	m.popupAuditLogID = request.AuditLogID
 	m.popupRawLines = strings.Split(request.RawJSON, "\n")
 	m.popupLines = buildPopupSummaryLines(request.RawJSON)
 	m.popupMessages = parsePopupMessages(request.RawJSON)

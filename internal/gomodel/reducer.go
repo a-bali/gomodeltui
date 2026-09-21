@@ -11,6 +11,7 @@ import (
 
 type Request struct {
 	ID           string
+	AuditLogID   string
 	Timestamp    time.Time
 	UserPath     string
 	SessionID    string
@@ -157,6 +158,9 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	}
 	if value := firstString(fields["user_path"]); value != "" {
 		request.UserPath = value
+	}
+	if value := firstString(fields["id"]); value != "" {
+		request.AuditLogID = value
 	}
 	if value := firstString(fields["session_id"]); value != "" {
 		request.SessionID = value

@@ -598,10 +598,10 @@ func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 
 func TestBackfilledPopupLazilyLoadsContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/admin/audit/detail" || r.URL.Query().Get("log_id") != "req-1" {
+		if r.URL.Path != "/admin/audit/detail" || r.URL.Query().Get("log_id") != "audit-1" {
 			t.Fatalf("request=%s", r.URL)
 		}
-		_, _ = w.Write([]byte(`{"request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"loaded prompt"}]},"response_body":{"choices":[{"message":{"content":"loaded response"}}]}}}`))
+		_, _ = w.Write([]byte(`{"id":"audit-1","request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"loaded prompt"}]},"response_body":{"choices":[{"message":{"content":"loaded response"}}]}}}`))
 	}))
 	defer server.Close()
 	client, err := gomodel.NewClient(server.URL, "token", server.Client())
@@ -610,7 +610,7 @@ func TestBackfilledPopupLazilyLoadsContent(t *testing.T) {
 	}
 	model := NewModel(client)
 	model.width, model.height = 80, 12
-	model.logs = []gomodel.Request{{ID: "req-1", RawJSON: `{"request_id":"req-1","data":{"bodies_omitted":true}}`}}
+	model.logs = []gomodel.Request{{ID: "req-1", AuditLogID: "audit-1", RawJSON: `{"request_id":"req-1","data":{"bodies_omitted":true}}`}}
 	_, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.popupLoading || !strings.Contains(model.renderPopup(), "Loading full request and response content") {
 		t.Fatalf("popup did not show loading state: %q", model.renderPopup())
