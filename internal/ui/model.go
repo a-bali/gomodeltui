@@ -604,7 +604,7 @@ func (m Model) View() string {
 	keys := mutedStyle.Render(truncateText(keysText, max(0, m.width-lipgloss.Width(left)-1)))
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
 	header := left + gap + keys
-	chartText := renderChart(buckets, m.width, chartHeight) + "\n" + renderChartXAxis(m.width, axisWidth, time.Duration(m.window))
+	chartText := renderChart(buckets, m.width, chartHeight) + "\n" + renderChartXAxis(m.width, axisWidth, time.Duration(m.window)) + "\n" + mutedStyle.Render(strings.Repeat("─", m.width))
 	logs := m.renderLogs(m.width)
 	if m.popup {
 		return m.renderPopup()
@@ -1115,7 +1115,7 @@ func responseTimeStyle(duration time.Duration) lipgloss.Style {
 }
 
 func chartAreaHeight(height int) int { return max(4, height/3-2) }
-func visibleLogRows(height int) int  { return max(1, height-chartAreaHeight(height)-5) }
+func visibleLogRows(height int) int  { return max(1, height-chartAreaHeight(height)-6) }
 func windowLabel(w chart.Window) string {
 	switch w {
 	case chart.Window5m:

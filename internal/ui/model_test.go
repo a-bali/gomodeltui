@@ -390,8 +390,8 @@ func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)
 	}
-	if got := visibleLogRows(30); got != 17 {
-		t.Fatalf("log rows=%d, want 17 with follow footer", got)
+	if got := visibleLogRows(30); got != 16 {
+		t.Fatalf("log rows=%d, want 16 with chart axis and follow footer", got)
 	}
 }
 
