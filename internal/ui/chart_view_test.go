@@ -10,7 +10,7 @@ import (
 
 func TestRenderChartScalesAndPlotsBrailleArea(t *testing.T) {
 	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 20, 5)
-	if !strings.Contains(got, "─┤↑") || !containsBraille(got) {
+	if !strings.Contains(got, "─┤2") || !containsBraille(got) {
 		t.Fatalf("expected scaled trace:\n%s", got)
 	}
 	if lines := strings.Count(got, "\n"); lines != 5 {

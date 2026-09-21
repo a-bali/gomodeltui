@@ -67,17 +67,17 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 }
 
 // chartAxis intentionally uses a fixed three-character gutter: tick, axis,
-// and a scale step. The exact dynamic maximum sits in the chart legend.
+// and a numeric scale step. The exact dynamic maximum sits in the chart legend.
 func chartAxis(ticks map[int]int, row, width int) string {
 	if width < chartAxisWidth {
 		return strings.Repeat(" ", width)
 	}
-	if value, ok := ticks[row]; ok {
-		step := "0"
-		if value > 0 && row != 0 {
-			step = "½"
-		} else if row == 0 && value > 0 {
-			step = "↑"
+	if _, ok := ticks[row]; ok {
+		step := "1"
+		if row == 0 {
+			step = "2"
+		} else if ticks[row] == 0 {
+			step = "0"
 		}
 		return "─┤" + step
 	}
