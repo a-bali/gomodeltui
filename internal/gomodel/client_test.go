@@ -46,3 +46,25 @@ func TestAuditLogsLoadsPagesAndFiltersExactRetention(t *testing.T) {
 		t.Fatalf("offsets=%v", offsets)
 	}
 }
+
+func TestAuditLogDetailReturnsCompleteEntry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/audit/detail" || r.URL.Query().Get("log_id") != "req-1" {
+			t.Fatalf("request=%s", r.URL)
+		}
+		_, _ = w.Write([]byte(`{"request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"hello"}]}}}`))
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, "token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := client.AuditLogDetail(context.Background(), "req-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := NewReducer().Apply(event)
+	if err != nil || request == nil || request.ID != "req-1" {
+		t.Fatalf("request=%+v err=%v", request, err)
+	}
+}

@@ -3,6 +3,7 @@ package ui
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -44,6 +45,11 @@ type backfillMsg struct {
 	events []gomodel.Event
 	err    error
 }
+type auditDetailMsg struct {
+	requestID string
+	event     gomodel.Event
+	err       error
+}
 
 const (
 	reconnectInterval   = 10 * time.Second
@@ -84,6 +90,9 @@ type Model struct {
 	popupMessage    int
 	popupAll        bool
 	popupOffset     int
+	popupRequestID  string
+	popupLoading    bool
+	popupLoadError  string
 	searching       bool
 	searchQuery     string
 	stream          io.ReadCloser
@@ -138,6 +147,13 @@ func backfillCmd(client *gomodel.Client, start time.Time) tea.Cmd {
 	return func() tea.Msg {
 		events, err := client.AuditLogs(context.Background(), start)
 		return backfillMsg{events: events, err: err}
+	}
+}
+
+func auditDetailCmd(client *gomodel.Client, requestID string) tea.Cmd {
+	return func() tea.Msg {
+		event, err := client.AuditLogDetail(context.Background(), requestID)
+		return auditDetailMsg{requestID: requestID, event: event, err: err}
 	}
 }
 
@@ -353,24 +369,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if len(m.logs) > 0 && m.selected < len(m.logs) {
-				m.popup = true
-				m.popupOffset = 0
-				m.popupRaw = false
-				m.popupMessage = 0
-				m.popupAll = false
-				m.popupRawLines = strings.Split(m.logs[m.selected].RawJSON, "\n")
-				m.popupLines = buildPopupSummaryLines(m.logs[m.selected].RawJSON)
-				m.popupMessages = parsePopupMessages(m.logs[m.selected].RawJSON)
-				if len(m.popupMessages) > 0 {
-					m.popupMessage = len(m.popupMessages) - 1
-					_, final := popupResponseState(m.logs[m.selected].RawJSON)
-					if final {
-						for index := range m.popupMessages {
-							m.popupMessages[index].expanded = false
-						}
-					} else {
-						m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
-					}
+				request := m.logs[m.selected]
+				m.openPopup(request)
+				if m.client != nil && bodiesOmitted(request.RawJSON) {
+					m.popupLoading = true
+					return m, auditDetailCmd(m.client, m.popupRequestID)
 				}
 			}
 		case "r":
@@ -415,6 +418,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.following {
 			m.selected = max(0, len(m.logs)-1)
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
+		}
+		return m, nil
+	case auditDetailMsg:
+		if msg.requestID != m.popupRequestID {
+			return m, nil
+		}
+		m.popupLoading = false
+		if msg.err != nil {
+			m.popupLoadError = "Could not load full content: " + msg.err.Error()
+			return m, nil
+		}
+		m.applyEvent(msg.event)
+		if !m.popup || m.popupRequestID != msg.requestID {
+			return m, nil
+		}
+		if index, ok := m.logIndex[msg.requestID]; ok {
+			m.openPopup(m.logs[index])
 		}
 		return m, nil
 	case errMsg:
@@ -709,6 +729,48 @@ func (m *Model) moveSelection(delta int) {
 
 func popupRows(height int) int { return max(1, height-1) }
 
+func (m *Model) openPopup(request gomodel.Request) {
+	m.popup = true
+	m.popupOffset = 0
+	m.popupRaw = false
+	m.popupMessage = 0
+	m.popupAll = false
+	m.popupLoading = false
+	m.popupLoadError = ""
+	m.popupRequestID = logicalRequestID(request.ID)
+	m.popupRawLines = strings.Split(request.RawJSON, "\n")
+	m.popupLines = buildPopupSummaryLines(request.RawJSON)
+	m.popupMessages = parsePopupMessages(request.RawJSON)
+	if len(m.popupMessages) == 0 {
+		return
+	}
+	m.popupMessage = len(m.popupMessages) - 1
+	_, final := popupResponseState(request.RawJSON)
+	if final {
+		for index := range m.popupMessages {
+			m.popupMessages[index].expanded = false
+		}
+		return
+	}
+	m.popupOffset = max(0, len(m.popupContentLines())-popupRows(m.height))
+}
+
+func logicalRequestID(id string) string {
+	if index := strings.Index(id, "/attempt-"); index >= 0 {
+		return id[:index]
+	}
+	return id
+}
+
+func bodiesOmitted(raw string) bool {
+	var payload struct {
+		Data struct {
+			BodiesOmitted bool `json:"bodies_omitted"`
+		} `json:"data"`
+	}
+	return json.Unmarshal([]byte(raw), &payload) == nil && payload.Data.BodiesOmitted
+}
+
 func (m Model) renderPopup() string {
 	lines := m.popupContentLines()
 	rows := popupRows(m.height)
@@ -718,6 +780,12 @@ func (m Model) renderPopup() string {
 	header := "Request structured  (r raw JSON  Enter expand/collapse  Space all  Esc close)"
 	if m.popupRaw {
 		header = "Raw JSON  (r structured view  Home/End  ↑↓/PgUp/PgDn scroll  Esc close)"
+	}
+	if m.popupLoading {
+		header = "Loading full request and response content…"
+	}
+	if m.popupLoadError != "" {
+		header = m.popupLoadError
 	}
 	content := []string{truncateText(header, max(1, m.width))}
 	for _, line := range lines[start:end] {

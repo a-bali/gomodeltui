@@ -596,6 +596,32 @@ func TestJSONPopupCanOpenScrollAndDismiss(t *testing.T) {
 	}
 }
 
+func TestBackfilledPopupLazilyLoadsContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/audit/detail" || r.URL.Query().Get("log_id") != "req-1" {
+			t.Fatalf("request=%s", r.URL)
+		}
+		_, _ = w.Write([]byte(`{"request_id":"req-1","timestamp":"2026-09-20T11:30:00Z","data":{"request_body":{"messages":[{"role":"user","content":"loaded prompt"}]},"response_body":{"choices":[{"message":{"content":"loaded response"}}]}}}`))
+	}))
+	defer server.Close()
+	client, err := gomodel.NewClient(server.URL, "token", server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := NewModel(client)
+	model.width, model.height = 80, 12
+	model.logs = []gomodel.Request{{ID: "req-1", RawJSON: `{"request_id":"req-1","data":{"bodies_omitted":true}}`}}
+	_, command := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !model.popupLoading || !strings.Contains(model.renderPopup(), "Loading full request and response content") {
+		t.Fatalf("popup did not show loading state: %q", model.renderPopup())
+	}
+	message := command()
+	_, _ = model.Update(message)
+	if model.popupLoading || !strings.Contains(strings.Join(model.popupRawLines, "\n"), "loaded prompt") || !strings.Contains(strings.Join(model.popupContentLines(), "\n"), "loaded response") {
+		t.Fatalf("popup did not refresh with detail: %q", strings.Join(model.popupContentLines(), "\n"))
+	}
+}
+
 func TestPopupInspectorExtractsMessagesAndToolCalls(t *testing.T) {
 	raw := `{"request_id":"req-1","data":{"requested_model":"virtual-smart","request_body":{"messages":[{"role":"system","content":"rules"},{"role":"assistant","tool_calls":[{"function":{"name":"exec","arguments":"{\"cmd\":\"pwd\"}"}}]}]}}}`
 	lines := buildPopupLines(raw)

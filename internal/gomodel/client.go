@@ -114,6 +114,23 @@ func (c *Client) AuditLogs(ctx context.Context, start time.Time) ([]Event, error
 	}
 }
 
+// AuditLogDetail returns a complete persisted audit entry, including bodies
+// that are deliberately omitted from the paginated audit log response.
+func (c *Client) AuditLogDetail(ctx context.Context, logID string) (Event, error) {
+	query := url.Values{"log_id": {logID}}
+	resp, err := c.do(ctx, "/admin/audit/detail?"+query.Encode(), nil)
+	if err != nil {
+		return Event{}, err
+	}
+	defer resp.Body.Close()
+	var entry json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&entry); err != nil {
+		return Event{}, fmt.Errorf("decode GoModel audit detail: %w", err)
+	}
+	event, _, err := auditLogEvent(entry)
+	return event, err
+}
+
 func auditLogEvent(entry json.RawMessage) (Event, time.Time, error) {
 	var header struct {
 		RequestID string    `json:"request_id"`
