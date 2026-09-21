@@ -386,6 +386,21 @@ func TestFormatUsageResetShowsDateAndRemainingTime(t *testing.T) {
 	}
 }
 
+func TestUsageWindowAddsResponsiveProgressBar(t *testing.T) {
+	reset := "resets 2026-09-21 12:06 (in 2h)"
+	wide := renderUsageWindow(100, "5h", 50, reset)
+	if !strings.Contains(wide, "50.0% used") || !strings.Contains(wide, "[") || !strings.Contains(wide, reset) {
+		t.Fatalf("wide usage line missing progress bar or details: %q", wide)
+	}
+	if got := lipgloss.Width(wide); got != 100 {
+		t.Fatalf("wide usage line width=%d, want 100", got)
+	}
+	narrow := renderUsageWindow(45, "5h", 50, reset)
+	if strings.Contains(narrow, "[") || !strings.Contains(narrow, reset) {
+		t.Fatalf("narrow usage line should retain details without a bar: %q", narrow)
+	}
+}
+
 func TestLayoutAllocatesOneThirdChartAndTwoThirdsLogs(t *testing.T) {
 	if got := chartAreaHeight(30); got != 8 {
 		t.Fatalf("chart height=%d", got)

@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const usageProgressMinWidth = 12
+
 func usageRefreshCmd(fetchers []usage.Fetcher, request uint64) tea.Cmd {
 	commands := make([]tea.Cmd, 0, len(fetchers))
 	for _, fetcher := range fetchers {
@@ -52,7 +54,7 @@ func (m Model) renderUsageScreen() string {
 			if !window.ResetsAt.IsZero() {
 				reset = formatUsageReset(window.ResetsAt, time.Now())
 			}
-			lines = append(lines, fmt.Sprintf("  %-8s %6.1f%% used  %s", window.Label+":", window.Used, mutedStyle.Render(reset)))
+			lines = append(lines, renderUsageWindow(m.width, window.Label, window.Used, reset))
 		}
 		if snapshot.Credits != "" {
 			creditLine := snapshot.Credits
@@ -63,6 +65,26 @@ func (m Model) renderUsageScreen() string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// renderUsageWindow keeps the textual usage details intact and uses any
+// remaining terminal width for a proportional bar. Narrow terminals retain
+// the compact text-only representation.
+func renderUsageWindow(width int, label string, used float64, reset string) string {
+	prefix := fmt.Sprintf("  %-8s %6.1f%% used", label+":", used)
+	barWidth := width - lipgloss.Width(prefix) - lipgloss.Width(reset) - 4
+	if barWidth < usageProgressMinWidth {
+		return prefix + "  " + mutedStyle.Render(reset)
+	}
+	return prefix + "  " + usageProgressBar(used, barWidth) + "  " + mutedStyle.Render(reset)
+}
+
+func usageProgressBar(used float64, width int) string {
+	width = max(usageProgressMinWidth, width)
+	innerWidth := width - 2
+	percent := min(100, max(0, int(used)))
+	filled := int(float64(innerWidth)*float64(percent)/100.0 + 0.5)
+	return "[" + failoverStyle.Render(strings.Repeat("█", filled)) + mutedStyle.Render(strings.Repeat("░", innerWidth-filled)) + "]"
 }
 
 func formatUsageReset(at, now time.Time) string {
