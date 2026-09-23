@@ -201,6 +201,11 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	}
 	if value := lastTurn(fields["data"]); value != "" {
 		request.LastTurn = value
+	} else if value := lastResponseTurn(fields["data"]); value != "" {
+		// Large prompts can be omitted from audit metadata while the response
+		// remains available in the lazily fetched audit detail. Keep that useful
+		// response text as the row preview in this case.
+		request.LastTurn = value
 	}
 	if auditData, ok := fields["data"].(map[string]any); ok {
 		if attempts, ok := auditData["attempts"].([]any); ok && len(attempts) > 1 {
@@ -332,6 +337,47 @@ func lastTurn(value any) string {
 		return function
 	}
 	return ""
+}
+
+func lastResponseTurn(value any) string {
+	auditData, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	response, ok := auditData["response_body"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	if text, ok := response["output_text"].(string); ok && strings.TrimSpace(text) != "" {
+		return text
+	}
+	choices, _ := response["choices"].([]any)
+	for index := len(choices) - 1; index >= 0; index-- {
+		choice, _ := choices[index].(map[string]any)
+		message, _ := choice["message"].(map[string]any)
+		if text := responseContentText(message["content"]); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func responseContentText(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	parts, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	var result strings.Builder
+	for _, part := range parts {
+		item, _ := part.(map[string]any)
+		if text, ok := item["text"].(string); ok {
+			result.WriteString(text)
+		}
+	}
+	return result.String()
 }
 
 func jsonFunction(text string) string {
