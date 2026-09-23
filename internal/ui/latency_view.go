@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,9 +13,29 @@ import (
 
 const latencyHistogramBuckets = 10
 
+type latencyDistributionMode uint8
+
+const (
+	latencyDistributionLinear latencyDistributionMode = iota
+	latencyDistributionLogarithmic
+	latencyDistributionP99
+	latencyDistributionModeCount
+)
+
+func (mode latencyDistributionMode) String() string {
+	switch mode {
+	case latencyDistributionLogarithmic:
+		return "log"
+	case latencyDistributionP99:
+		return "p99 + overflow"
+	default:
+		return "linear"
+	}
+}
+
 func (m Model) renderLatencyScreen() string {
 	summaries := m.latencyStore.Summaries()
-	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  +/- buckets:%d  c recalculate  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyBuckets))
+	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  view:%s  v cycle  +/- buckets:%d  c recalculate  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyMode, m.latencyBuckets))
 	if len(summaries) == 0 {
 		return strings.Join([]string{header, "", mutedStyle.Render("No completed request timings observed yet.")}, "\n")
 	}
@@ -43,9 +65,86 @@ func (m Model) renderLatencyScreen() string {
 	if scaleMax <= 0 {
 		scaleMax = latency.RoundedMaxDuration(m.latencyStore.MaxDuration(), m.latencyBuckets)
 	}
-	labels := latencyBucketLabels(scaleMax, m.latencyBuckets)
-	histogram := renderCenteredLatencyHistogram(m.latencyStore.HistogramWithMax(selectedSummary.Key, m.latencyBuckets, scaleMax), labels, m.width, bottomHeight)
+	counts, labels := latencyDistribution(selectedSummary.Durations, m.latencyMode, m.latencyBuckets, scaleMax)
+	histogram := renderCenteredLatencyHistogram(counts, labels, m.width, bottomHeight)
 	return strings.Join(append([]string{header}, append(list, histogram)...), "\n")
+}
+
+// latencyDistribution returns equal-width, logarithmic, or percentile-focused
+// bins. The p99 mode appends a distinct bucket for all samples above p99.
+func latencyDistribution(durations []time.Duration, mode latencyDistributionMode, buckets int, maxDuration time.Duration) ([]int, []string) {
+	buckets = max(1, buckets)
+	values := make([]time.Duration, 0, len(durations))
+	for _, duration := range durations {
+		if duration > 0 {
+			values = append(values, duration)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
+	if mode == latencyDistributionP99 {
+		counts := make([]int, buckets+1)
+		labels := make([]string, buckets+1)
+		if len(values) == 0 {
+			labels[buckets] = ">p99"
+			return counts, labels
+		}
+		p99Index := (len(values)*99+99)/100 - 1
+		cutoff := values[max(0, p99Index)]
+		for index := 0; index < buckets; index++ {
+			upper := cutoff * time.Duration(index+1) / time.Duration(buckets)
+			labels[index] = formatBucketDuration(upper)
+		}
+		labels[buckets] = ">p99"
+		for _, duration := range values {
+			if duration > cutoff {
+				counts[buckets]++
+				continue
+			}
+			index := int((duration - 1) * time.Duration(buckets) / cutoff)
+			counts[min(buckets-1, max(0, index))]++
+		}
+		return counts, labels
+	}
+	counts := make([]int, buckets)
+	labels := make([]string, buckets)
+	if len(values) == 0 {
+		return counts, labels
+	}
+	if mode == latencyDistributionLogarithmic {
+		minimum, maximum := float64(values[0]), float64(values[len(values)-1])
+		logMin, logMax := math.Log(minimum), math.Log(maximum)
+		for index := range counts {
+			upper := minimum
+			if index == buckets-1 || logMax == logMin {
+				upper = maximum
+			} else {
+				upper = math.Exp(logMin + (logMax-logMin)*float64(index+1)/float64(buckets))
+			}
+			labels[index] = formatBucketDuration(time.Duration(upper))
+		}
+		for _, duration := range values {
+			index := 0
+			if logMax > logMin {
+				index = int(math.Log(float64(duration)/minimum) / (logMax - logMin) * float64(buckets))
+			}
+			counts[min(buckets-1, max(0, index))]++
+		}
+		return counts, labels
+	}
+	if maxDuration <= 0 {
+		maxDuration = latency.RoundedMaxDuration(values[len(values)-1], buckets)
+	}
+	if maxDuration <= 0 {
+		return counts, labels
+	}
+	for index := range counts {
+		labels[index] = formatBucketDuration(maxDuration * time.Duration(index+1) / time.Duration(buckets))
+	}
+	for _, duration := range values {
+		index := int((duration - 1) * time.Duration(buckets) / maxDuration)
+		counts[min(buckets-1, max(0, index))]++
+	}
+	return counts, labels
 }
 
 var latencyMetricHeaders = []string{"attempts", "logical", "ok", "err", "p50", "p95", "max"}

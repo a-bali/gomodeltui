@@ -75,6 +75,7 @@ type Model struct {
 	latencyScaleMax time.Duration
 	latencyScaleAt  time.Time
 	latencyBuckets  int
+	latencyMode     latencyDistributionMode
 	usageScreen     bool
 	mcpScreen       bool
 	mcpOffset       int
@@ -277,6 +278,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "-":
 				m.latencyBuckets = max(2, m.latencyBuckets-1)
 				m.recalculateLatencyScale(time.Now())
+			case "v":
+				m.latencyMode = (m.latencyMode + 1) % latencyDistributionModeCount
 			case "c":
 				m.recalculateLatencyScale(time.Now())
 			case "up":
