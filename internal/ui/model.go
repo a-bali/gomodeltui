@@ -175,6 +175,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			if m.stream != nil {
+				_ = m.stream.Close()
+			}
+			return m, tea.Quit
+		}
 		if m.popup {
 			switch msg.String() {
 			case "esc":
@@ -242,7 +248,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "m", "esc":
 				m.mcpScreen = false
-			case "q", "ctrl+c":
+			case "q":
 				return m, tea.Quit
 			case "up":
 				m.mcpOffset--
@@ -309,8 +315,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.searchQuery) > 0 {
 					m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
 				}
-			case "ctrl+c":
-				m.searching = false
 			default:
 				if msg.Type == tea.KeyRunes {
 					m.searchQuery += string(msg.Runes)
@@ -319,7 +323,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "q":
 			if m.stream != nil {
 				_ = m.stream.Close()
 			}
