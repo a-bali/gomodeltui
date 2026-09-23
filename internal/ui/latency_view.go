@@ -92,7 +92,11 @@ func (t latencyTable) row(summary latency.Summary) string {
 func (t latencyTable) format(values []string) string {
 	columns := make([]string, len(values))
 	for index, value := range values {
-		columns[index] = fmt.Sprintf("%*s", t.widths[index], value)
+		if index == 0 {
+			columns[index] = fmt.Sprintf("%-*s", t.widths[index], value)
+		} else {
+			columns[index] = fmt.Sprintf("%*s", t.widths[index], value)
+		}
 	}
 	return strings.Join(columns, "  ")
 }
