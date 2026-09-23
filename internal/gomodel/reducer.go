@@ -358,8 +358,34 @@ func lastResponseTurn(value any) string {
 		if text := responseContentText(message["content"]); text != "" {
 			return text
 		}
+		if text := responseToolCalls(message["tool_calls"]); text != "" {
+			return text
+		}
 	}
 	return ""
+}
+
+func responseToolCalls(value any) string {
+	calls, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	var previews []string
+	for _, value := range calls {
+		call, _ := value.(map[string]any)
+		function, _ := call["function"].(map[string]any)
+		name, _ := function["name"].(string)
+		arguments, _ := function["arguments"].(string)
+		if name == "" {
+			continue
+		}
+		preview := "tool: " + name
+		if strings.TrimSpace(arguments) != "" {
+			preview += " " + arguments
+		}
+		previews = append(previews, preview)
+	}
+	return strings.Join(previews, " | ")
 }
 
 func responseContentText(value any) string {
