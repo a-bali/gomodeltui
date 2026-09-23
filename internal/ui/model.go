@@ -76,6 +76,8 @@ type Model struct {
 	latencyScaleAt  time.Time
 	latencyBuckets  int
 	usageScreen     bool
+	mcpScreen       bool
+	mcpOffset       int
 	usageFetchers   []usage.Fetcher
 	usageSnapshots  map[string]usage.Snapshot
 	usageErrors     map[string]string
@@ -234,6 +236,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.mcpScreen {
+			rows := max(1, m.height-2)
+			last := max(0, len(m.mcpSummaries())-rows)
+			switch msg.String() {
+			case "m", "esc":
+				m.mcpScreen = false
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "up":
+				m.mcpOffset--
+			case "down":
+				m.mcpOffset++
+			case "pgup", "pageup":
+				m.mcpOffset -= rows
+			case "pgdown", "pagedown":
+				m.mcpOffset += rows
+			case "home":
+				m.mcpOffset = 0
+			case "end":
+				m.mcpOffset = last
+			}
+			m.mcpOffset = min(last, max(0, m.mcpOffset))
+			return m, nil
+		}
 		if m.latencyScreen {
 			summaries := m.latencyStore.Summaries()
 			switch msg.String() {
@@ -303,6 +329,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.latencySelected = 0
 			m.latencyOffset = 0
 			m.recalculateLatencyScale(time.Now())
+			return m, nil
+		case "m":
+			m.mcpScreen, m.mcpOffset = true, 0
 			return m, nil
 		case "u":
 			m.usageScreen = true
@@ -511,10 +540,12 @@ func (m *Model) applyEvent(event gomodel.Event) {
 	m.replaceRequestRows(request.ID, rows)
 	terminalEvent := event.Event == "audit.completed" || event.Event == "audit.failed"
 	if (request.Terminal || terminalEvent) && m.counted[request.ID].IsZero() {
-		for _, row := range rows {
-			m.store.Add(row.TimestampOrNow(), row.Success)
+		if !request.IsMCP() {
+			for _, row := range rows {
+				m.store.Add(row.TimestampOrNow(), row.Success)
+			}
+			m.latencyStore.AddRequest(requestLatencySamples(rows))
 		}
-		m.latencyStore.AddRequest(requestLatencySamples(rows))
 		m.counted[request.ID] = request.TimestampOrNow()
 	}
 	if m.following {
@@ -570,6 +601,9 @@ func (m Model) View() string {
 	if m.usageScreen {
 		return m.renderUsageScreen()
 	}
+	if m.mcpScreen {
+		return m.renderMCPScreen()
+	}
 	chartHeight := chartAreaHeight(m.height)
 	axisWidth := chartAxisMinimumWidth
 	var buckets []chart.Bucket
@@ -618,9 +652,10 @@ func (m Model) View() string {
 
 func chartHeaderLegend(width int, followLabel string) string {
 	for _, candidate := range []string{
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  l latency  u usage  q quit",
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  l latency  u usage",
-		"1-7 window  +/- zoom  l latency  u usage",
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  l latency  u usage  m: mcp  q quit",
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  l latency  u usage  m: mcp",
+		"1-7 window  +/- zoom  l latency  u usage  m: mcp",
+		"1-7 window  l/u/m views",
 		"1-7 window",
 	} {
 		if lipgloss.Width(candidate) <= width {
