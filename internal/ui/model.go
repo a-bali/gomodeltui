@@ -681,11 +681,14 @@ func (m Model) renderLogs(width int) string {
 			prefix += arrow + target
 		}
 		prefix += " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
+		if request.IsMCP() {
+			prefix = icon + " " + mutedStyle.Render(timestamp) + " " + path + " " + popupToolStyle.Render("MCP") + " " + request.MCPAction() + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
+		}
 		if request.Error != "" {
 			prefix += " " + collapsePreview(request.Error)
 		}
 		line := prefix
-		if request.LastTurn != "" {
+		if request.LastTurn != "" && !request.IsMCP() {
 			separator := mutedStyle.Render("  ")
 			available := max(0, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(separator))
 			line = prefix + separator + mutedStyle.Render(truncateText(collapsePreview(request.LastTurn), available))
@@ -764,6 +767,11 @@ func (m *Model) openPopup(request gomodel.Request) {
 	m.popupRequestID = logicalRequestID(request.ID)
 	m.popupAuditLogID = request.AuditLogID
 	m.popupRawLines = strings.Split(request.RawJSON, "\n")
+	if request.IsMCP() {
+		m.popupLines = buildMCPPopupLines(request)
+		m.popupMessages = nil
+		return
+	}
 	m.popupLines = buildPopupSummaryLines(request.RawJSON)
 	m.popupMessages = parsePopupMessages(request.RawJSON)
 	if len(m.popupMessages) == 0 {
