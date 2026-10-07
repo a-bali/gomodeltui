@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/balia/gomodeltui/internal/gomodel"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -153,8 +154,10 @@ func popupRoleStyle(role string) lipgloss.Style {
 		return popupUserStyle
 	case "assistant":
 		return popupAssistantStyle
-	case "tool", "tool_result", "function":
+	case "tool", "tool_result", "function", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output":
 		return popupToolStyle
+	case "reasoning":
+		return popupAssistantStyle
 	default:
 		return mutedStyle
 	}
@@ -211,12 +214,7 @@ func isContainer(value any) bool {
 }
 
 func bodyMessages(body any) ([]any, bool) {
-	item, ok := body.(map[string]any)
-	if !ok {
-		return nil, false
-	}
-	messages, ok := item["messages"].([]any)
-	return messages, ok
+	return gomodel.BodyMessages(body)
 }
 
 func formatMessage(index int, value any) []string {
@@ -226,6 +224,24 @@ func formatMessage(index int, value any) []string {
 	}
 	role := firstJSONString(item, "role", "type")
 	lines := []string{fmt.Sprintf("  [%d] %s", index, role)}
+	switch item["type"] {
+	case "function_call", "custom_tool_call":
+		lines = append(lines, "      tool call: "+firstJSONString(item, "name"))
+		lines = appendIndented(lines, firstJSONString(item, "arguments", "input"), "        args: ")
+	case "function_call_output", "custom_tool_call_output":
+		if text, ok := item["output"].(string); ok {
+			lines = append(lines, formatToolResult(text)...)
+		} else if output, ok := item["output"]; ok {
+			lines = append(lines, formatContentBlocks(output)...)
+		}
+	case "reasoning":
+		if summary, ok := item["summary"]; ok {
+			lines = append(lines, formatContentBlocks(summary)...)
+		}
+	}
+	if callID, ok := item["call_id"]; ok {
+		lines = append(lines, "      call_id: "+displayJSONValue(callID))
+	}
 	if calls, ok := item["tool_calls"].([]any); ok {
 		for _, call := range calls {
 			lines = append(lines, formatToolCall(call)...)
@@ -309,6 +325,16 @@ func formatContentBlocks(value any) []string {
 
 func formatBodySummary(body any) []string {
 	if item, ok := body.(map[string]any); ok {
+		if output, ok := item["output"].([]any); ok && len(output) > 0 {
+			var lines []string
+			for index, value := range output {
+				lines = append(lines, formatMessage(index+1, value)...)
+			}
+			return lines
+		}
+		if text, ok := item["output_text"].(string); ok && text != "" {
+			return appendIndented(nil, text, "  ")
+		}
 		if choices, ok := item["choices"].([]any); ok {
 			var lines []string
 			for _, choice := range choices {

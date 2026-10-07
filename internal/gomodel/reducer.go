@@ -318,23 +318,14 @@ func lastTurn(value any) string {
 	if !ok {
 		return ""
 	}
-	messages, ok := body["messages"].([]any)
+	messages, ok := BodyMessages(body)
 	if !ok || len(messages) == 0 {
 		return ""
 	}
-	last, ok := messages[len(messages)-1].(map[string]any)
-	if !ok {
-		return ""
-	}
-	content := last["content"]
-	if text, ok := content.(string); ok {
-		if function := jsonFunction(text); function != "" {
-			return function
+	for index := len(messages) - 1; index >= 0; index-- {
+		if text := responseItemPreview(messages[index]); text != "" {
+			return text
 		}
-		return text
-	}
-	if function := jsonFunctionValue(content); function != "" {
-		return function
 	}
 	return ""
 }
@@ -350,6 +341,13 @@ func lastResponseTurn(value any) string {
 	}
 	if text, ok := response["output_text"].(string); ok && strings.TrimSpace(text) != "" {
 		return text
+	}
+	if output, ok := response["output"].([]any); ok {
+		for index := len(output) - 1; index >= 0; index-- {
+			if text := responseItemPreview(output[index]); text != "" {
+				return text
+			}
+		}
 	}
 	choices, _ := response["choices"].([]any)
 	for index := len(choices) - 1; index >= 0; index-- {

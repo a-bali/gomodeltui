@@ -12,6 +12,33 @@ func TestCanonicalModelRemovesProviderPrefix(t *testing.T) {
 	}
 }
 
+func TestResponsesContentPreview(t *testing.T) {
+	for _, test := range []struct {
+		name, bodies, want string
+	}{
+		{"string input", `"request_body":{"input":"latest prompt"}`, "latest prompt"},
+		{"text blocks", `"request_body":{"instructions":"system prompt","input":[{"role":"user","content":[{"type":"input_text","text":"first "},{"type":"input_text","text":"second"}]}]}`, "first second"},
+		{"call", `"request_body":{"input":[{"type":"function_call","name":"shell","arguments":"{\"cmd\":\"pwd\"}"}]}`, `tool: shell {"cmd":"pwd"}`},
+		{"tool output", `"request_body":{"input":[{"type":"function_call_output","call_id":"call-1","output":"command result"}]}`, "command result"},
+		{"skip reasoning", `"request_body":{"input":[{"role":"user","content":"latest prompt"},{"type":"reasoning","summary":[]}]}`, "latest prompt"},
+		{"response text", `"response_body":{"output":[{"type":"reasoning","summary":[]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer"}]}]}`, "answer"},
+		{"response call", `"response_body":{"output":[{"type":"function_call","name":"shell","arguments":"{}"}]}`, "tool: shell {}"},
+		{"request preferred", `"request_body":{"input":"prompt"},"response_body":{"output_text":"answer"}`, "prompt"},
+		{"chat blocks", `"request_body":{"messages":[{"role":"user","content":[{"type":"text","text":"chat prompt"}]}]}`, "chat prompt"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw := `{"request_id":"responses-1","type":"audit.completed","data":{"status_code":200,"data":{` + test.bodies + `}}}`
+			request, err := NewReducer().Apply(Event{Event: "audit.completed", Data: json.RawMessage(raw)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if request.LastTurn != test.want {
+				t.Fatalf("LastTurn = %q, want %q", request.LastTurn, test.want)
+			}
+		})
+	}
+}
+
 func TestSuccessfulFailoverIsNotAnError(t *testing.T) {
 	r := NewReducer()
 	started := Event{Event: "audit.updated", Data: json.RawMessage(`{"request_id":"req-failover","type":"audit.updated","data":{"error_type":"upstream_timeout","data":{"attempts":[{"provider":"openai"},{"provider":"anthropic"}]}}}`)}
