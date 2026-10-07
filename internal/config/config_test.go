@@ -29,7 +29,7 @@ func TestLoadUsesYAMLThenEnvironmentThenFlags(t *testing.T) {
 
 func TestLoadDefaultsAndValidatesLogRetention(t *testing.T) {
 	cfg, err := validate(Config{GoModel: GoModelConfig{APIKey: "key"}})
-	if err != nil || cfg.Retention() != time.Hour {
+	if err != nil || cfg.Retention() != 24*time.Hour {
 		t.Fatalf("default retention: config=%+v err=%v", cfg, err)
 	}
 	if _, err := validate(Config{LogRetention: "never", GoModel: GoModelConfig{APIKey: "key"}}); err == nil {

@@ -53,7 +53,8 @@ type auditDetailMsg struct {
 
 const (
 	reconnectInterval   = 10 * time.Second
-	defaultLogRetention = time.Hour
+	defaultLogRetention = 24 * time.Hour
+	backfillWindow      = time.Hour
 )
 
 type Model struct {
@@ -126,7 +127,7 @@ func (m Model) Init() tea.Cmd {
 	if m.client == nil {
 		return refreshCmd()
 	}
-	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), backfillCmd(m.client, time.Now().Add(-m.logRetention)), refreshCmd())
+	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), backfillCmd(m.client, time.Now().Add(-backfillWindow)), refreshCmd())
 }
 
 func refreshCmd() tea.Cmd {

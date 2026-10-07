@@ -94,7 +94,7 @@ Configuration is loaded in this order (later sources override earlier ones):
 
 Options:
   --config PATH                       YAML configuration file
-  --log_retention DURATION            In-memory history duration (default: 1h)
+  --log_retention DURATION            In-memory history duration (default: 24h)
   --gomodel.url URL                   GoModel URL (default: http://localhost:8080)
   --gomodel.api_key KEY               GoModel API key (required)
   --providers.opencode.api_key KEY    OpenCode Go API key
@@ -189,7 +189,7 @@ func applyFlags(args []string, options []option) error {
 func validate(cfg Config) (Config, error) {
 	cfg.LogRetention = strings.TrimSpace(cfg.LogRetention)
 	if cfg.LogRetention == "" {
-		cfg.LogRetention = "1h"
+		cfg.LogRetention = "24h"
 	}
 	if retention, err := time.ParseDuration(cfg.LogRetention); err != nil || retention <= 0 {
 		return Config{}, fmt.Errorf("log_retention must be a positive duration")

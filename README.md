@@ -18,7 +18,7 @@ arguments. Later sources override earlier ones. The default file is
 use `--config /path/to/config.yaml` or `GOMODELTUI_CONFIG` to select another file.
 
 ```yaml
-log_retention: 1h
+log_retention: 24h
 
 gomodel:
   url: http://localhost:8080
@@ -43,6 +43,9 @@ The same dotted keys work in every source:
 | `providers.opencode.api_key` | `PROVIDERS_OPENCODE_API_KEY` | `--providers.opencode.api_key` |
 | `providers.commandcode.cookie` | `PROVIDERS_COMMANDCODE_COOKIE` | `--providers.commandcode.cookie` |
 | `providers.codex.auth_path` | `PROVIDERS_CODEX_AUTH_PATH` | `--providers.codex.auth_path` |
+
+The app keeps request history in memory for 24 hours by default. Startup backfill
+loads the most recent hour; set `log_retention` to change in-memory retention.
 
 Restrict the YAML file to its owner because it can contain credentials
 (`chmod 600 ~/.config/gomodeltui/config.yaml`).
