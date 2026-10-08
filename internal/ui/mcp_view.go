@@ -3,7 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 	"time"
 )
 

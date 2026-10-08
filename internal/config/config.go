@@ -100,6 +100,7 @@ Options:
   --providers.opencode.api_key KEY    OpenCode Go API key
   --providers.commandcode.cookie TEXT Command Code Cookie header or session token
   --providers.codex.auth_path PATH    Codex auth.json path
+  -v, --version                       Show version and exit
   -h, --help                          Show this help
 
 Environment mapping:

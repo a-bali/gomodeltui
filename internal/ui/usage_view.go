@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/balia/gomodeltui/internal/usage"
+	"github.com/a-bali/gomodeltui/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -30,7 +30,7 @@ func usageRefreshCmd(fetchers []usage.Fetcher, request uint64) tea.Cmd {
 func (m Model) renderUsageScreen() string {
 	header := lipgloss.NewStyle().Bold(true).Render("Provider usage") + mutedStyle.Render("  r refresh  u/Esc back")
 	if len(m.usageFetchers) == 0 {
-		return strings.Join([]string{header, "", mutedStyle.Render("No usage account is available. Set OPENCODE_API_KEY or COMMANDCODE_COOKIE, or sign in to Codex locally.")}, "\n")
+		return strings.Join([]string{header, "", mutedStyle.Render("No usage account is available. Set PROVIDERS_OPENCODE_API_KEY or PROVIDERS_COMMANDCODE_COOKIE, or sign in to Codex locally.")}, "\n")
 	}
 	now := time.Now()
 	progressWidth := m.sharedUsageProgressWidth(now)

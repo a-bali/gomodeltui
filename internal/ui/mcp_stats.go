@@ -2,8 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"github.com/balia/gomodeltui/internal/gomodel"
-	"github.com/balia/gomodeltui/internal/latency"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/latency"
 	"github.com/charmbracelet/lipgloss"
 	"sort"
 	"strings"

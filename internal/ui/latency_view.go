@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/balia/gomodeltui/internal/latency"
+	"github.com/a-bali/gomodeltui/internal/latency"
 	"github.com/charmbracelet/lipgloss"
 )
 

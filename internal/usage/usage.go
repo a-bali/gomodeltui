@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/balia/gomodeltui/internal/config"
+	"github.com/a-bali/gomodeltui/internal/config"
 )
 
 type Window struct {

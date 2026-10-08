@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 	"strings"
 	"testing"
 )

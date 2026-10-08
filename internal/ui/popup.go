@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 	"github.com/charmbracelet/lipgloss"
 )
 

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/balia/gomodeltui/internal/chart"
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/chart"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 )
 
 func TestRemoteLiveChartSmoke(t *testing.T) {
-	client, err := gomodel.NewClient(os.Getenv("GOMODEL_URL"), os.Getenv("GOMODEL_TOKEN"), nil)
+	client, err := gomodel.NewClient(os.Getenv("GOMODEL_URL"), os.Getenv("GOMODEL_API_KEY"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

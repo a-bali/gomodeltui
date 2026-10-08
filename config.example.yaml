@@ -1,0 +1,47 @@
+# gomodeltui example configuration.
+#
+# Copy this file to your config directory and restrict its permissions, because
+# it can contain credentials:
+#
+#   mkdir -p ~/.config/gomodeltui
+#   cp config.example.yaml ~/.config/gomodeltui/config.yaml
+#   chmod 600 ~/.config/gomodeltui/config.yaml
+#
+# Configuration is loaded in this order, and later sources override earlier
+# ones:
+#
+#   1. YAML file (this file), selected with --config or GOMODELTUI_CONFIG
+#   2. Environment variables
+#   3. Command-line flags
+#
+# Run `gomodeltui --help` for the complete option list.
+
+# How long the TUI keeps request history in memory. Accepts any positive Go
+# duration, for example 30m, 6h, or 24h. Defaults to 24h.
+log_retention: 24h
+
+gomodel:
+  # Base URL of the GoModel instance. Defaults to http://localhost:8080.
+  url: http://localhost:8080
+  # API key with access to the GoModel admin live-log and audit endpoints.
+  # Required. Prefer the GOMODEL_API_KEY environment variable over storing the
+  # key in this file.
+  api_key: your-gomodel-api-key
+
+# Optional provider accounts power the quota screen (press "u"). A provider is
+# shown only when its credential is available. Uncomment and fill in only the
+# providers you use.
+providers:
+  # OpenCode Go (PROVIDERS_OPENCODE_API_KEY).
+  # opencode:
+  #   api_key: your-opencode-api-key
+
+  # Command Code (PROVIDERS_COMMANDCODE_COOKIE). Accepts a full Cookie header,
+  # a single "name=value" cookie, or a bare session token.
+  # commandcode:
+  #   cookie: "__Secure-commandcode_prod_.session_token=…"
+
+  # ChatGPT / Codex (PROVIDERS_CODEX_AUTH_PATH). Defaults to ~/.codex/auth.json
+  # when that file exists, so setting this is usually unnecessary.
+  # codex:
+  #   auth_path: ~/.codex/auth.json

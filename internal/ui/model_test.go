@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/balia/gomodeltui/internal/chart"
-	"github.com/balia/gomodeltui/internal/gomodel"
-	"github.com/balia/gomodeltui/internal/latency"
-	"github.com/balia/gomodeltui/internal/usage"
+	"github.com/a-bali/gomodeltui/internal/chart"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/latency"
+	"github.com/a-bali/gomodeltui/internal/usage"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

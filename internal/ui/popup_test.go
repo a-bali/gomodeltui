@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

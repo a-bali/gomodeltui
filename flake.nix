@@ -10,7 +10,7 @@
     in {
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [ go gopls golangci-lint ];
+          packages = with pkgs; [ go gopls golangci-lint goreleaser ];
           shellHook = ''
             export GOPATH="''${GOPATH:-$PWD/.gopath}"
             export GOTOOLCHAIN="''${GOTOOLCHAIN:-local}"

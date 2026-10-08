@@ -1,4 +1,14 @@
+# Build artifacts and caches.
 .gopath/
 bin/
+dist/
+/gomodeltui
+
+# Local tooling and secrets.
 .env
+config.yaml
+coverage.out
+*.test
+
+# OS metadata.
 .DS_Store

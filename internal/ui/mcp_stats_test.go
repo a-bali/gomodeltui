@@ -2,8 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"github.com/balia/gomodeltui/internal/chart"
-	"github.com/balia/gomodeltui/internal/gomodel"
+	"github.com/a-bali/gomodeltui/internal/chart"
+	"github.com/a-bali/gomodeltui/internal/gomodel"
 	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 	"testing"
@@ -11,7 +11,8 @@ import (
 )
 
 func TestMCPStatsExcludeModelMetricsAndRetainHistory(t *testing.T) {
-	m := NewModel(nil)
+	// Pin retention so the expiry assertion is independent of the default.
+	m := NewModelWithRetention(nil, time.Hour)
 	m.width, m.height = 150, 20
 	now := time.Now()
 	event := func(id, provider, method string, status, duration int, body string) gomodel.Event {
