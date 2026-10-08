@@ -1,5 +1,11 @@
 # gomodeltui
 
+> [!WARNING]
+> **This application was fully vibe-coded. No human has ever reviewed the
+> source code.** It has not been audited for correctness, security, or
+> safety. Use it at your own risk — do not treat it as reviewed or trusted
+> software, and review the code yourself before relying on it.
+
 [![CI](https://github.com/a-bali/gomodeltui/actions/workflows/ci.yml/badge.svg)](https://github.com/a-bali/gomodeltui/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/a-bali/gomodeltui?sort=semver)](https://github.com/a-bali/gomodeltui/releases)
 [![Go version](https://img.shields.io/github/go-mod/go-version/a-bali/gomodeltui)](go.mod)

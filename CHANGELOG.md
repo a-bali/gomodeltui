@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-08
+
 ### Added
 
 - Live activity dashboard backed by the GoModel SSE admin log stream, with
@@ -26,3 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sample file (`config.example.yaml`).
 - Release tooling: GitHub Actions CI and release workflows, GoReleaser
   configuration, and version metadata exposed via `--version`.
+
+[Unreleased]: https://github.com/a-bali/gomodeltui/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/a-bali/gomodeltui/releases/tag/v1.0.0
