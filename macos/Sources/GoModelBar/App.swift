@@ -1,5 +1,6 @@
 import AppKit
 import GoModelCore
+import ServiceManagement
 
 private struct UsageStatusEntry {
     let id: String
@@ -168,6 +169,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             let configuration = NSMenuItem(title: "Configuration", action: #selector(editConfiguration), keyEquivalent: "")
             configuration.target = self
             menu.addItem(configuration)
+            let loginItem = NSMenuItem(title: "Start at login", action: #selector(toggleStartAtLogin(_:)), keyEquivalent: "")
+            loginItem.target = self
+            switch SMAppService.mainApp.status {
+            case .enabled:
+                loginItem.state = .on
+            case .requiresApproval:
+                loginItem.state = .mixed
+            case .notRegistered, .notFound:
+                loginItem.state = .off
+            @unknown default:
+                loginItem.state = .off
+            }
+            menu.addItem(loginItem)
             let usageOptions = NSMenu()
             let entries = usageStatusEntries()
             let selected = Set(UserDefaults.standard.stringArray(forKey: visibleUsageProvidersKey) ?? [])
@@ -184,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     usageOptions.addItem(item)
                 }
             }
-            let usageItem = NSMenuItem(title: "Usage Icons", action: nil, keyEquivalent: "")
+            let usageItem = NSMenuItem(title: "Usage icons", action: nil, keyEquivalent: "")
             usageItem.submenu = usageOptions
             menu.addItem(usageItem)
             menu.addItem(.separator())
@@ -192,12 +206,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
                 item.target = self; menu.addItem(item)
             }
-            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY), in: button)
+            guard let event = NSApp.currentEvent else { return }
+            NSMenu.popUpContextMenu(menu, with: event, for: button)
         } else { togglePanel() }
     }
 
     @objc private func reconnect() { monitor.reconnect() }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func toggleStartAtLogin(_ sender: NSMenuItem) {
+        let service = SMAppService.mainApp
+        do {
+            switch service.status {
+            case .enabled:
+                try service.unregister()
+            case .requiresApproval:
+                SMAppService.openSystemSettingsLoginItems()
+            case .notRegistered, .notFound:
+                try service.register()
+                if service.status == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+            @unknown default:
+                try service.register()
+            }
+        } catch {
+            NSApp.presentError(error)
+        }
+        switch service.status {
+        case .enabled: sender.state = .on
+        case .requiresApproval: sender.state = .mixed
+        default: sender.state = .off
+        }
+    }
 
     @objc private func toggleUsageProvider(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
