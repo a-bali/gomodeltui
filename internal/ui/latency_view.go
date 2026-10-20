@@ -35,7 +35,7 @@ func (mode latencyDistributionMode) String() string {
 
 func (m Model) renderLatencyScreen() string {
 	summaries := m.latencyStore.Summaries()
-	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  view:%s  v cycle  +/- buckets:%d  c recalculate  l/Esc back  ↑↓/PgUp/PgDn select  Home/End", m.latencyMode, m.latencyBuckets))
+	header := lipgloss.NewStyle().Bold(true).Render("Latency history") + mutedStyle.Render(fmt.Sprintf("  view: %s  v: cycle  +/-: buckets (%d)  c: recalculate  l: back  Esc: back  ↑↓: select  PgUp/PgDn: select  Home: first  End: last", m.latencyMode, m.latencyBuckets))
 	if len(summaries) == 0 {
 		return strings.Join([]string{header, "", mutedStyle.Render("No completed request timings observed yet.")}, "\n")
 	}

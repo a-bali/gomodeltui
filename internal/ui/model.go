@@ -770,7 +770,7 @@ func (m Model) View() string {
 	}
 	keysText := chartHeaderLegend(max(0, m.width-lipgloss.Width(left)-1), followLabel)
 	if m.searching {
-		keysText = "/" + m.searchQuery + "  Enter find  Esc cancel"
+		keysText = "/: " + m.searchQuery + "  Enter: find  Esc: cancel"
 	}
 	keys := mutedStyle.Render(truncateText(keysText, max(0, m.width-lipgloss.Width(left)-1)))
 	gap := lipgloss.NewStyle().Width(max(1, m.width-lipgloss.Width(left)-lipgloss.Width(keys))).Render("")
@@ -789,12 +789,12 @@ func (m Model) View() string {
 
 func chartHeaderLegend(width int, followLabel string) string {
 	for _, candidate := range []string{
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  M toggle MCP  l latency  u usage  m: mcp  q quit",
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  M toggle MCP  l latency  u usage  m: mcp",
-		"1-7 window  +/- zoom  M toggle MCP  l latency  u usage  m: mcp",
-		"1-7 window  M toggle MCP  l/u/m views",
-		"1-7 window  M MCP",
-		"1-7 window",
+		"1-7: window 5m/15m/1h/3h/6h/12h/24h  +/-: zoom  Space: " + followLabel + "  ↑↓: select  Enter: JSON  /: search  M: toggle MCP  l: latency  u: usage  m: MCP  q: quit",
+		"1-7: window 5m/15m/1h/3h/6h/12h/24h  +/-: zoom  M: MCP  l: latency  u: usage  m: MCP",
+		"1-7: window  +/-: zoom  M: toggle MCP  l: latency  u: usage  m: MCP",
+		"1-7: window  M: MCP  l: latency  u: usage  m: MCP",
+		"1-7: window  M: MCP",
+		"1-7: window",
 	} {
 		if lipgloss.Width(candidate) <= width {
 			return candidate
@@ -995,9 +995,9 @@ func (m Model) renderPopup() string {
 	start := min(m.popupOffset, max(0, len(lines)-rows))
 	end := min(len(lines), start+rows)
 	thumbStart, thumbEnd := scrollbarThumb(rows, len(lines), start)
-	header := "Request structured  (r raw JSON  R reload content  Enter expand/collapse  Space all  Esc close)"
+	header := "Request structured  (r: raw JSON  R: reload content  Enter: expand/collapse  Space: all  Esc: close)"
 	if m.popupRaw {
-		header = "Raw JSON  (r structured view  R reload content  Home/End  ↑↓/PgUp/PgDn scroll  Esc close)"
+		header = "Raw JSON  (r: structured view  R: reload content  Home: top  End: bottom  ↑↓: scroll  PgUp/PgDn: scroll  Esc: close)"
 	}
 	if m.popupLoading {
 		header = "Loading full request and response content…"

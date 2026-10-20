@@ -55,7 +55,7 @@ func (m Model) mcpSummaries() []latency.Summary {
 }
 
 func (m Model) renderMCPScreen() string {
-	header := lipgloss.NewStyle().Bold(true).Render("MCP methods") + mutedStyle.Render("  last 24h  m/Esc back  ↑↓/PgUp/PgDn scroll  Home/End")
+	header := lipgloss.NewStyle().Bold(true).Render("MCP methods") + mutedStyle.Render("  last 24h  m: back  Esc: back  ↑↓: scroll  PgUp/PgDn: scroll  Home: first  End: last")
 	summaries := m.mcpSummaries()
 	if len(summaries) == 0 {
 		return header + "\n\n" + mutedStyle.Render("No completed MCP calls observed yet.")
