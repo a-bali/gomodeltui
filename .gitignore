@@ -12,3 +12,7 @@ coverage.out
 
 # OS metadata.
 .DS_Store
+
+# Native macOS app build artifacts.
+macos/.build/
+macos/.swiftpm/
