@@ -17,11 +17,15 @@ make macos-dmg
 open bin/GoModel.app
 ```
 
-The build script produces a locally ad-hoc-signed app for the build machine's
-architecture. Copy `bin/GoModel.app` to Applications if desired. A public
-DMG is created at `dist/GoModel_<version>_macOS.dmg`. The app is ad-hoc signed;
+The build script produces an app with a GoModel chart icon, locally ad-hoc-signed
+for the build machine's architecture. The DMG at
+`dist/GoModel_<version>_macOS.dmg` opens as a drag-and-drop installer: drag
+`GoModel.app` onto the `Applications` shortcut. The app is ad-hoc signed;
 Developer ID signing and notarization are not part of this build, so macOS may
 require opening it from Privacy & Security on first launch.
+
+Use **Start at login** in the menu bar icon's right-click menu to register the
+app as a macOS login item. macOS may require approval in System Settings.
 
 For a preview with generated sample requests and no network connection:
 
@@ -59,7 +63,7 @@ Finder launches normally do not inherit a terminal's environment, so use
 the YAML file or launch the executable from that terminal when using these
 variables. Config errors appear on the status circle's tooltip.
 
-Use the **Usage Icons** submenu in the right-click menu to choose which
+Use the **Usage icons** submenu in the right-click menu to choose which
 configured providers get their own standard-width menu bar item. Quota items
 show available-quota bars from shortest to longest window (for example, 5h,
 weekly, monthly); balance items show the amount in a dark, color-coded pill.
@@ -125,7 +129,7 @@ after extraction. The JSON inspector keeps its full document until closed.
   balances appear together in a compact line; provider names open the provider
   page. A refresh control updates provider usage, and failures remain visible
   there with an error indicator.
-- The right-click **Usage Icons** submenu independently toggles menu bar items
+- The right-click **Usage icons** submenu independently toggles menu bar items
   for configured providers. Quotas use bars ordered by window duration, shortest
   first. Balances use dark, color-coded pills. Selection is saved in local macOS
   preferences; clicking a provider item toggles the main dropdown.
@@ -186,7 +190,7 @@ after extraction. The JSON inspector keeps its full document until closed.
   with ligatures disabled.
 - Click outside, press Escape, or click the menu bar chart again to close the
   panel. Collection continues while closed. Right-click the menu bar icon for
-  **Usage Icons**, **Reconnect**, **Configuration**, and **Quit GoModel**. The
+  **Usage icons**, **Reconnect**, **Configuration**, and **Quit GoModel**. The
   panel has no footer toolbar.
 - A green/red circle beside the title shows connection state. Hover it for details.
 - Selecting already loaded chart intervals reuses their history. Connected

@@ -44,7 +44,7 @@ Click container rows to toggle them, or use **Expand All / Collapse All**.
 
 Build with `make macos`, then open `bin/GoModel.app` (macOS 14+, Swift 6).
 It reads the existing TUI configuration; right-click the main icon for
-**Configuration**, provider **Usage Icons**, **Reconnect**, and **Quit GoModel**.
+**Configuration**, provider **Usage icons**, **Reconnect**, and **Quit GoModel**.
 Run `open bin/GoModel.app --args --demo` to preview it without a server.
 
 The native chart counts each completed logical model request once, by final

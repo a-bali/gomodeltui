@@ -50,7 +50,10 @@ macos-test:
 
 macos-dmg: macos
 	mkdir -p dist
-	hdiutil create -volname "GoModel $(VERSION)" -srcfolder bin/GoModel.app -ov -format UDZO "dist/GoModel_$(VERSION)_macOS.dmg"
+	set -eu; staging_dir=$$(mktemp -d); trap 'rm -rf "$$staging_dir"' EXIT; \
+	ditto bin/GoModel.app "$$staging_dir/GoModel.app"; \
+	ln -s /Applications "$$staging_dir/Applications"; \
+	hdiutil create -volname "GoModel $(VERSION)" -srcfolder "$$staging_dir" -ov -format UDZO "dist/GoModel_$(VERSION)_macOS.dmg"
 
 clean:
 	rm -rf bin dist
