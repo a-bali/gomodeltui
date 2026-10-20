@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native macOS menu bar app with a standard-width one-hour activity icon and
   red error strip, a half-screen dropdown with a native stacked bar chart,
   and compact colored request lines with usage, latency, and text previews.
+- macOS app icon, drag-and-drop DMG installer with an Applications shortcut,
+  and a right-click Start at login control.
 - Right-click controls for reconnect/config/quit, a connection status circle,
   and a bottom-center Live button for returning from scrolling or time filters.
 - Native log MCP checkbox (off by default) and fixed width request text.
@@ -96,6 +98,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audit history omits bodies, and preserved when late history enriches live rows.
 - Native request usage now updates from late `usage.*` events, preserving
   token and cache values after completion without double-counting requests.
+- TUI hotkey legends use consistent colons after key labels.
+- Native right-click menu uses system context-menu placement so all entries
+  remain visible below the menu bar.
+- Native Start at login menu item can register a previously unseen app service
+  and opens Login Items in System Settings when approval is required.
 
 ## [1.0.0] - 2026-10-08
 
