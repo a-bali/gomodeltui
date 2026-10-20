@@ -60,7 +60,7 @@ func TestRequestRowFormatAndStableUserPathColor(t *testing.T) {
 	model.width, model.height = 160, 30
 	model.logs = []gomodel.Request{{Timestamp: time.Date(2026, 9, 10, 12, 42, 6, 0, time.UTC), UserPath: "/team/a", ClientModel: "virtual-smart", RoutedModel: "opencode-go/xiaomi/mimo-v2.5", InputTokens: 123123, CacheRatio: .97, OutputTokens: 3211, StatusCode: "200", Duration: 234200000, Terminal: true, Success: true}}
 	got := model.renderLogs(model.width)
-	for _, want := range []string{"12:42:06", "/team/a", "virtual-smart", "opencode-go/xiaomi/mimo-v2.5", "i:123123", "o:3211", "c:97%", "200", "234.2ms"} {
+	for _, want := range []string{"12:42:06", "/team/a", "virtual-smart", "opencode-go/xiaomi/mimo-v2.5", "i:123,123", "o:3,211", "c:97%", "200", "234.2ms"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("row %q missing %q", got, want)
 		}
@@ -552,8 +552,8 @@ func TestLogHomeAndEndNavigation(t *testing.T) {
 	}
 }
 
-func TestLogRowsArePrunedByRetentionAndHaveScrollbar(t *testing.T) {
-	model := NewModelWithRetention(nil, time.Hour)
+func TestLogRowsArePrunedByHistoryWindowAndHaveScrollbar(t *testing.T) {
+	model := NewModel(nil)
 	model.width, model.height = 80, 12
 	rows := make([]gomodel.Request, 1020)
 	for index := range rows {
@@ -566,7 +566,7 @@ func TestLogRowsArePrunedByRetentionAndHaveScrollbar(t *testing.T) {
 	if len(model.logs) != len(rows) {
 		t.Fatalf("log count=%d, want %d", len(model.logs), len(rows))
 	}
-	model.logs[0].Timestamp = time.Now().Add(-2 * time.Hour)
+	model.allLogs[0].Timestamp = time.Now().Add(-25 * time.Hour)
 	model.prune(time.Now())
 	if len(model.logs) != len(rows)-1 {
 		t.Fatalf("log count after prune=%d, want %d", len(model.logs), len(rows)-1)

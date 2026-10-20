@@ -8,21 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	LogRetention string          `yaml:"log_retention"`
-	GoModel      GoModelConfig   `yaml:"gomodel"`
-	Providers    ProvidersConfig `yaml:"providers"`
-}
-
-// Retention is the time span kept in the TUI's in-memory request data.
-func (c Config) Retention() time.Duration {
-	retention, _ := time.ParseDuration(c.LogRetention)
-	return retention
+	GoModel   GoModelConfig   `yaml:"gomodel"`
+	Providers ProvidersConfig `yaml:"providers"`
 }
 
 type GoModelConfig struct {
@@ -34,6 +26,9 @@ type ProvidersConfig struct {
 	OpenCode    OpenCodeConfig    `yaml:"opencode"`
 	CommandCode CommandCodeConfig `yaml:"commandcode"`
 	Codex       CodexConfig       `yaml:"codex"`
+	OpenRouter  OpenRouterConfig  `yaml:"openrouter"`
+	DeepSeek    DeepSeekConfig    `yaml:"deepseek"`
+	MiMo        MiMoConfig        `yaml:"mimo"`
 }
 
 type OpenCodeConfig struct {
@@ -216,13 +211,6 @@ func applyFlags(args []string, options []option) error {
 }
 
 func validate(cfg Config) (Config, error) {
-	cfg.LogRetention = strings.TrimSpace(cfg.LogRetention)
-	if cfg.LogRetention == "" {
-		cfg.LogRetention = "24h"
-	}
-	if retention, err := time.ParseDuration(cfg.LogRetention); err != nil || retention <= 0 {
-		return Config{}, fmt.Errorf("log_retention must be a positive duration")
-	}
 	cfg.GoModel.URL = strings.TrimRight(strings.TrimSpace(cfg.GoModel.URL), "/")
 	if cfg.GoModel.URL == "" {
 		cfg.GoModel.URL = "http://localhost:8080"

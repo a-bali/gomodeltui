@@ -60,8 +60,9 @@ func (s *Store) Snapshot(now time.Time, window Window, columns ...int) []Bucket 
 	end := now.Truncate(time.Minute).Add(time.Minute - time.Nanosecond)
 	if len(columns) > 0 && columns[0] > 0 {
 		width = columns[0]
-		start = now.Add(-time.Duration(window))
-		end = now
+		interval := max(time.Nanosecond, time.Duration(window)/time.Duration(width))
+		end = now.Truncate(interval).Add(interval)
+		start = end.Add(-time.Duration(window))
 	}
 	if width < 1 {
 		width = 1
@@ -72,7 +73,7 @@ func (s *Store) Snapshot(now time.Time, window Window, columns ...int) []Bucket 
 		result[index].Start = start.Add(time.Duration(index) * duration)
 	}
 	for _, event := range s.events {
-		if event.at.Before(start) || event.at.After(end) {
+		if event.at.Before(start) || event.at.After(now) || event.at.After(end) {
 			continue
 		}
 		index := int(event.at.Sub(start) / duration)

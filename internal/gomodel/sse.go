@@ -9,9 +9,10 @@ import (
 )
 
 type Event struct {
-	ID    string
-	Event string
-	Data  json.RawMessage
+	Historical bool
+	ID         string
+	Event      string
+	Data       json.RawMessage
 }
 
 func ReadEvent(reader *bufio.Reader) (Event, error) {

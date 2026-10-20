@@ -10,28 +10,36 @@ import (
 )
 
 type Request struct {
-	ID           string
-	AuditLogID   string
-	Timestamp    time.Time
-	UserPath     string
-	SessionID    string
-	ClientModel  string
-	RoutedModel  string
-	Model        string
-	Provider     string
-	Endpoint     string
-	StatusCode   string
-	InputTokens  int
-	CacheRatio   float64
-	OutputTokens int
-	Error        string
-	Duration     time.Duration
-	Terminal     bool
-	Success      bool
-	Failover     bool
-	LastTurn     string
-	Attempts     []Attempt
-	RawJSON      string
+	ID                string
+	AuditLogID        string
+	Timestamp         time.Time
+	StartedAt         time.Time
+	UserPath          string
+	SessionID         string
+	ClientModel       string
+	RoutedModel       string
+	Model             string
+	Provider          string
+	Endpoint          string
+	StatusCode        string
+	InputTokens       int
+	CacheRatio        float64
+	OutputTokens      int
+	InputTokensKnown  bool
+	OutputTokensKnown bool
+	CacheRatioKnown   bool
+	Error             string
+	Duration          time.Duration
+	Terminal          bool
+	Success           bool
+	Failover          bool
+	LastTurn          string
+	Attempts          []Attempt
+	RawJSON           string
+	liveTerminal      bool
+	MCPActionLabel    string
+	MCPResultKnown    bool
+	MCPFailed         bool
 }
 
 type Attempt struct {
@@ -86,6 +94,8 @@ func (r Request) LogRows() []Request {
 		row.Success = attempt.Success
 		row.Failover = index > 0
 		row.LastTurn = ""
+		row.InputTokens, row.OutputTokens, row.CacheRatio = 0, 0, 0
+		row.InputTokensKnown, row.OutputTokensKnown, row.CacheRatioKnown = false, false, false
 		rows = append(rows, row)
 	}
 	// Usage and prompt details belong on the final routed response row.
@@ -94,6 +104,9 @@ func (r Request) LogRows() []Request {
 	rows[len(rows)-1].CacheRatio = r.CacheRatio
 	rows[len(rows)-1].OutputTokens = r.OutputTokens
 	rows[len(rows)-1].LastTurn = r.LastTurn
+	rows[len(rows)-1].InputTokensKnown = r.InputTokensKnown
+	rows[len(rows)-1].OutputTokensKnown = r.OutputTokensKnown
+	rows[len(rows)-1].CacheRatioKnown = r.CacheRatioKnown
 	return rows
 }
 
@@ -150,11 +163,33 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 		request = &Request{ID: requestID}
 		r.requests[requestID] = request
 	}
+	if strings.HasPrefix(firstString(event.Event, payload.Type), "usage.") {
+		mergeRequestUsage(request, fields, false)
+		copy := *request
+		return &copy, nil
+	}
+	if event.Historical && request.liveTerminal {
+		mergeRequestUsage(request, fields, true)
+		if request.AuditLogID == "" {
+			request.AuditLogID = firstString(fields["id"])
+		}
+		if request.LastTurn == "" {
+			request.LastTurn = previewFromFields(fields)
+		}
+		if request.IsMCP() {
+			request.captureMCP(prettyJSON(event.Data))
+		}
+		copy := *request
+		return &copy, nil
+	}
 	if strings.HasPrefix(firstString(event.Event, payload.Type), "audit.") {
 		request.RawJSON = prettyJSON(event.Data)
 	}
 	if timestamp := parseTime(firstString(payload.Timestamp, fields["timestamp"])); !timestamp.IsZero() {
 		request.Timestamp = timestamp
+		if request.StartedAt.IsZero() {
+			request.StartedAt = timestamp
+		}
 	}
 	if value := firstString(fields["user_path"]); value != "" {
 		request.UserPath = value
@@ -178,20 +213,12 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 	if value := firstString(fields["requested_model"]); value != "" {
 		request.ClientModel = value
 	}
-	if value, ok := firstFloat(fields["cached_input_ratio"]); ok {
-		request.CacheRatio = value
-	}
+	mergeRequestUsage(request, fields, false)
 	if value := firstString(fields["path"], fields["endpoint"]); value != "" {
 		request.Endpoint = value
 	}
 	if value := firstString(fields["status_code"], fields["status"]); value != "" {
 		request.StatusCode = value
-	}
-	if value := firstInt(fields["input_tokens"]); value > 0 {
-		request.InputTokens = value
-	}
-	if value := firstInt(fields["output_tokens"]); value > 0 {
-		request.OutputTokens = value
 	}
 	if value := firstString(fields["error"], fields["error_type"]); value != "" {
 		request.Error = value
@@ -213,10 +240,17 @@ func (r *Reducer) Apply(event Event) (*Request, error) {
 			request.Attempts = parseAttempts(attempts)
 		}
 	}
+	if request.IsMCP() {
+		request.captureMCP(request.RawJSON)
+	}
 
 	eventType := firstString(event.Event, payload.Type)
 	if strings.HasPrefix(eventType, "audit.") && (strings.HasSuffix(eventType, ".completed") || strings.HasSuffix(eventType, ".failed")) {
 		request.Terminal = true
+		request.liveTerminal = !event.Historical
+		if request.Duration <= 0 && !event.Historical && !request.StartedAt.IsZero() {
+			request.Duration = time.Since(request.StartedAt)
+		}
 		// A stream can establish an HTTP 200 response and fail later while
 		// reading or delivering SSE data. In that case the status remains 200,
 		// but the audit error is still a failed request.
@@ -243,17 +277,6 @@ func routedModel(model, provider string) string {
 		return model
 	}
 	return provider + "/" + model
-}
-
-func firstInt(value any) int {
-	if number, ok := value.(float64); ok {
-		return int(number)
-	}
-	if text, ok := value.(string); ok {
-		number, _ := strconv.Atoi(text)
-		return number
-	}
-	return 0
 }
 
 func firstFloat(value any) (float64, bool) {

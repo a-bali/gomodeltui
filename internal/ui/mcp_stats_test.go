@@ -11,8 +11,7 @@ import (
 )
 
 func TestMCPStatsExcludeModelMetricsAndRetainHistory(t *testing.T) {
-	// Pin retention so the expiry assertion is independent of the default.
-	m := NewModelWithRetention(nil, time.Hour)
+	m := NewModel(nil)
 	m.width, m.height = 150, 20
 	now := time.Now()
 	event := func(id, provider, method string, status, duration int, body string) gomodel.Event {
@@ -52,7 +51,7 @@ func TestMCPStatsExcludeModelMetricsAndRetainHistory(t *testing.T) {
 	if m.mcpScreen {
 		t.Fatal("MCP screen did not close")
 	}
-	m.prune(now.Add(2 * time.Hour))
+	m.prune(now.Add(25 * time.Hour))
 	if len(m.mcpSummaries()) != 0 {
 		t.Fatal("expired MCP stats retained")
 	}

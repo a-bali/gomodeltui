@@ -35,6 +35,7 @@ type errMsg struct {
 	connectionID uint64
 }
 type tickMsg time.Time
+type liveLatencyTickMsg time.Time
 type usageMsg struct {
 	provider string
 	snapshot usage.Snapshot
@@ -42,96 +43,109 @@ type usageMsg struct {
 	request  uint64
 }
 type backfillMsg struct {
-	events []gomodel.Event
-	err    error
+	events     []gomodel.Event
+	err        error
+	start      time.Time
+	generation uint64
 }
 type auditDetailMsg struct {
-	requestID string
-	event     gomodel.Event
-	err       error
+	generation uint64
+	requestID  string
+	event      gomodel.Event
+	err        error
 }
 
 const (
-	reconnectInterval   = 10 * time.Second
-	defaultLogRetention = 24 * time.Hour
-	backfillWindow      = time.Hour
+	reconnectInterval = 10 * time.Second
+	historyRetention  = 24 * time.Hour
 )
 
 type Model struct {
-	client          *gomodel.Client
-	reducer         *gomodel.Reducer
-	store           *chart.Store
-	latencyStore    *latency.Store
-	window          chart.Window
-	logs            []gomodel.Request
-	logIndex        map[string]int
-	counted         map[string]time.Time
-	logRetention    time.Duration
-	selected        int
-	following       bool
-	followPulse     uint8
-	latencyScreen   bool
-	latencySelected int
-	latencyOffset   int
-	latencyScaleMax time.Duration
-	latencyScaleAt  time.Time
-	latencyBuckets  int
-	latencyMode     latencyDistributionMode
-	usageScreen     bool
-	mcpScreen       bool
-	mcpOffset       int
-	usageFetchers   []usage.Fetcher
-	usageSnapshots  map[string]usage.Snapshot
-	usageErrors     map[string]string
-	usageRefreshAt  time.Time
-	usageRequest    uint64
-	usagePending    int
-	popup           bool
-	popupLines      []string
-	popupRawLines   []string
-	popupRaw        bool
-	popupMessages   []popupMessage
-	popupMessage    int
-	popupAll        bool
-	popupOffset     int
-	popupRequestID  string
-	popupAuditLogID string
-	popupLoading    bool
-	popupLoadError  string
-	searching       bool
-	searchQuery     string
-	stream          io.ReadCloser
-	reader          *bufio.Reader
-	lastEventID     string
-	connected       bool
-	connecting      bool
-	lastConnectAt   time.Time
-	connectionID    uint64
-	logOffset       int
-	width, height   int
-	err             string
+	client              *gomodel.Client
+	reducer             *gomodel.Reducer
+	store               *chart.Store
+	mcpStore            *chart.Store
+	includeMCP          bool
+	allLogs             []gomodel.Request
+	latencyStore        *latency.Store
+	window              chart.Window
+	logs                []gomodel.Request
+	logIndex            map[string]int
+	counted             map[string]time.Time
+	historyCoveredFrom  time.Time
+	backfillPendingFrom time.Time
+	backfillGeneration  uint64
+	selected            int
+	following           bool
+	followPulse         uint8
+	liveLatencyTicker   bool
+	latencyScreen       bool
+	latencySelected     int
+	latencyOffset       int
+	latencyScaleMax     time.Duration
+	latencyScaleAt      time.Time
+	latencyBuckets      int
+	latencyMode         latencyDistributionMode
+	usageScreen         bool
+	mcpScreen           bool
+	mcpOffset           int
+	usageFetchers       []usage.Fetcher
+	usageSnapshots      map[string]usage.Snapshot
+	usageErrors         map[string]string
+	usageRefreshAt      time.Time
+	usageRequest        uint64
+	usagePending        int
+	popup               bool
+	popupLines          []string
+	popupRawLines       []string
+	popupRaw            bool
+	popupMessages       []popupMessage
+	popupMessage        int
+	popupAll            bool
+	popupOffset         int
+	popupRequestID      string
+	popupAuditLogID     string
+	popupLoading        bool
+	popupLoadError      string
+	popupRecord         gomodel.Request
+	popupGeneration     uint64
+	popupCancel         context.CancelFunc
+	previewPending      map[string]previewWork
+	previewDone         map[string]bool
+	previewRetry        map[string]time.Time
+	previewSequence     uint64
+	stopping            bool
+	searching           bool
+	searchQuery         string
+	stream              io.ReadCloser
+	reader              *bufio.Reader
+	lastEventID         string
+	connected           bool
+	connecting          bool
+	lastConnectAt       time.Time
+	connectionID        uint64
+	logOffset           int
+	width, height       int
+	err                 string
 }
 
 func NewModel(client *gomodel.Client, usageFetchers ...usage.Fetcher) *Model {
-	return NewModelWithRetention(client, defaultLogRetention, usageFetchers...)
-}
-
-func NewModelWithRetention(client *gomodel.Client, retention time.Duration, usageFetchers ...usage.Fetcher) *Model {
-	if retention <= 0 {
-		retention = defaultLogRetention
-	}
-	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, usageFetchers: usageFetchers, usageSnapshots: make(map[string]usage.Snapshot), usageErrors: make(map[string]string), logIndex: make(map[string]int), counted: make(map[string]time.Time), logRetention: retention, following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1}
+	return &Model{client: client, reducer: gomodel.NewReducer(), store: chart.NewStore(), latencyStore: latency.NewStore(), window: chart.Window1h, latencyBuckets: latencyHistogramBuckets, usageFetchers: usageFetchers, usageSnapshots: make(map[string]usage.Snapshot), usageErrors: make(map[string]string), logIndex: make(map[string]int), counted: make(map[string]time.Time), following: true, connecting: true, lastConnectAt: time.Now(), connectionID: 1, backfillGeneration: 1}
 }
 
 func (m Model) Init() tea.Cmd {
 	if m.client == nil {
 		return refreshCmd()
 	}
-	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), backfillCmd(m.client, time.Now().Add(-backfillWindow)), refreshCmd())
+	return tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), backfillCmd(m.client, time.Now().Add(-time.Duration(m.window)), m.backfillGeneration), refreshCmd())
 }
 
 func refreshCmd() tea.Cmd {
 	return tea.Tick(3*time.Second, func(at time.Time) tea.Msg { return tickMsg(at) })
+}
+
+func liveLatencyRefreshCmd() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(at time.Time) tea.Msg { return liveLatencyTickMsg(at) })
 }
 
 func connectCmd(client *gomodel.Client, lastID string, connectionID uint64) tea.Cmd {
@@ -148,17 +162,34 @@ func connectCmd(client *gomodel.Client, lastID string, connectionID uint64) tea.
 	}
 }
 
-func backfillCmd(client *gomodel.Client, start time.Time) tea.Cmd {
+func backfillCmd(client *gomodel.Client, start time.Time, generation uint64) tea.Cmd {
 	return func() tea.Msg {
 		events, err := client.AuditLogs(context.Background(), start)
-		return backfillMsg{events: events, err: err}
+		return backfillMsg{events: events, err: err, start: start, generation: generation}
 	}
 }
 
-func auditDetailCmd(client *gomodel.Client, auditLogID, requestID string) tea.Cmd {
+func (m *Model) requestWindowBackfill(force ...bool) tea.Cmd {
+	if m.client == nil {
+		return nil
+	}
+	start := time.Now().Add(-time.Duration(m.window))
+	forced := len(force) > 0 && force[0]
+	if !forced && !m.historyCoveredFrom.IsZero() && !start.Before(m.historyCoveredFrom) {
+		return nil
+	}
+	if !m.backfillPendingFrom.IsZero() && !start.Before(m.backfillPendingFrom) {
+		return nil
+	}
+	m.backfillGeneration++
+	m.backfillPendingFrom = start
+	return backfillCmd(m.client, start, m.backfillGeneration)
+}
+
+func auditDetailCmd(ctx context.Context, client *gomodel.Client, auditLogID, requestID string, generation uint64) tea.Cmd {
 	return func() tea.Msg {
-		event, err := client.AuditLogDetail(context.Background(), auditLogID)
-		return auditDetailMsg{requestID: requestID, event: event, err: err}
+		event, err := client.RequestDetail(ctx, auditLogID, requestID)
+		return auditDetailMsg{requestID: requestID, event: event, err: err, generation: generation}
 	}
 }
 
@@ -173,11 +204,40 @@ func readEventCmd(reader *bufio.Reader, connectionID uint64) tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, command := m.updateState(msg)
+	return model, tea.Batch(command, m.ensureLiveLatencyTicker(), m.schedulePreviews())
+}
+
+func (m *Model) ensureLiveLatencyTicker() tea.Cmd {
+	if m.liveLatencyTicker || !m.hasVisiblePendingRequest() {
+		return nil
+	}
+	m.liveLatencyTicker = true
+	return liveLatencyRefreshCmd()
+}
+
+func (m *Model) hasVisiblePendingRequest() bool {
+	if m.popup || m.latencyScreen || m.mcpScreen || m.usageScreen || len(m.logs) == 0 {
+		return false
+	}
+	rows := visibleLogRows(m.height)
+	start := min(max(m.logOffset, 0), len(m.logs))
+	end := min(len(m.logs), start+rows)
+	for _, request := range m.logs[start:end] {
+		if !request.Terminal {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) updateState(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.stopContentWork()
 			if m.stream != nil {
 				_ = m.stream.Close()
 			}
@@ -187,6 +247,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc":
 				m.popup = false
+				m.cancelPopupDetail()
+				m.popupRawLines, m.popupLines, m.popupMessages = nil, nil, nil
+				m.popupRecord = gomodel.Request{}
+			case "R":
+				return m, m.loadPopupDetail()
 			case "tab":
 				// Structured and raw JSON are intentionally the only two views.
 			case "r":
@@ -328,6 +393,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "q":
+			m.stopContentWork()
 			if m.stream != nil {
 				_ = m.stream.Close()
 			}
@@ -341,27 +407,48 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			m.mcpScreen, m.mcpOffset = true, 0
 			return m, nil
+		case "M":
+			m.includeMCP = !m.includeMCP
+			m.refreshVisibleLogs()
 		case "u":
 			m.usageScreen = true
 			return m, m.startUsageRefresh(time.Now())
 		case "+", "=":
 			m.window = chart.NextWindow(m.window, -1)
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "-":
 			m.window = chart.NextWindow(m.window, 1)
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "1":
 			m.window = chart.Window5m
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "2":
 			m.window = chart.Window15m
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "3":
 			m.window = chart.Window1h
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "4":
 			m.window = chart.Window3h
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "5":
 			m.window = chart.Window6h
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "6":
 			m.window = chart.Window12h
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "7":
 			m.window = chart.Window24h
+			m.refreshVisibleLogs()
+			return m, m.requestWindowBackfill()
 		case "space", " ":
 			m.following = !m.following
 			if m.following {
@@ -370,10 +457,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 			}
 		case "c":
+			m.backfillGeneration++
+			m.backfillPendingFrom = time.Time{}
+			m.historyCoveredFrom = time.Time{}
+			m.cancelPreviews()
+			m.previewDone, m.previewRetry = nil, nil
 			m.logs = nil
+			m.allLogs = nil
+			m.reducer = gomodel.NewReducer()
 			m.logIndex = make(map[string]int)
 			m.counted = make(map[string]time.Time)
 			m.store = chart.NewStore()
+			m.mcpStore = chart.NewStore()
 			m.latencyStore = latency.NewStore()
 			m.selected = 0
 			m.logOffset = 0
@@ -409,9 +504,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.logs) > 0 && m.selected < len(m.logs) {
 				request := m.logs[m.selected]
 				m.openPopup(request)
-				if m.client != nil && m.popupAuditLogID != "" && bodiesOmitted(request.RawJSON) {
-					m.popupLoading = true
-					return m, auditDetailCmd(m.client, m.popupAuditLogID, m.popupRequestID)
+				if m.client != nil {
+					return m, m.loadPopupDetail()
 				}
 			}
 		case "r":
@@ -421,7 +515,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.connectionID++
 			m.connected, m.connecting = false, true
 			m.lastConnectAt = time.Now()
-			return m, connectCmd(m.client, m.lastEventID, m.connectionID)
+			return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), m.requestWindowBackfill(true))
 		}
 	case connectMsg:
 		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
@@ -443,6 +537,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyEvent(msg.event)
 		return m, readEventCmd(m.reader, m.connectionID)
 	case backfillMsg:
+		if msg.generation != m.backfillGeneration {
+			return m, nil
+		}
+		m.backfillPendingFrom = time.Time{}
 		if msg.err != nil {
 			m.err = "load audit history: " + msg.err.Error()
 			return m, nil
@@ -450,30 +548,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, event := range msg.events {
 			m.applyEvent(event)
 		}
-		sort.SliceStable(m.logs, func(i, j int) bool { return m.logs[i].Timestamp.Before(m.logs[j].Timestamp) })
-		m.rebuildLogIndex()
+		sort.SliceStable(m.allLogs, func(i, j int) bool { return m.allLogs[i].Timestamp.Before(m.allLogs[j].Timestamp) })
+		m.refreshVisibleLogs()
 		m.prune(time.Now())
+		if m.historyCoveredFrom.IsZero() || msg.start.Before(m.historyCoveredFrom) {
+			m.historyCoveredFrom = msg.start
+		}
 		if m.following {
 			m.selected = max(0, len(m.logs)-1)
 			m.logOffset = max(0, len(m.logs)-visibleLogRows(m.height))
 		}
-		return m, nil
+		return m, m.requestWindowBackfill()
 	case auditDetailMsg:
-		if msg.requestID != m.popupRequestID {
+		if !m.popup || msg.requestID != m.popupRequestID || msg.generation != m.popupGeneration {
 			return m, nil
 		}
 		m.popupLoading = false
 		if msg.err != nil {
-			m.popupLoadError = "Could not load full content: " + msg.err.Error()
+			m.popupLoadError = "Could not load full content: " + msg.err.Error() + " (R retry)"
 			return m, nil
 		}
-		m.applyEvent(msg.event)
-		if !m.popup || m.popupRequestID != msg.requestID {
-			return m, nil
-		}
-		if index, ok := m.logIndex[msg.requestID]; ok {
-			m.openPopup(m.logs[index])
-		}
+		m.receivePopupDetail(msg)
+		return m, nil
+	case previewMsg:
+		m.receivePreview(msg)
 		return m, nil
 	case errMsg:
 		if msg.connectionID != 0 && msg.connectionID != m.connectionID {
@@ -518,7 +616,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.connecting = true
 		m.lastConnectAt = time.Now()
 		m.connectionID++
-		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), refreshCmd(), usageCmd)
+		return m, tea.Batch(connectCmd(m.client, m.lastEventID, m.connectionID), m.requestWindowBackfill(true), refreshCmd(), usageCmd)
+	case liveLatencyTickMsg:
+		if m.hasVisiblePendingRequest() {
+			return m, liveLatencyRefreshCmd()
+		}
+		m.liveLatencyTicker = false
+		return m, nil
 	}
 	return m, nil
 }
@@ -553,6 +657,11 @@ func (m *Model) applyEvent(event gomodel.Event) {
 				m.store.Add(row.TimestampOrNow(), row.Success)
 			}
 			m.latencyStore.AddRequest(requestLatencySamples(rows))
+		} else {
+			if m.mcpStore == nil {
+				m.mcpStore = chart.NewStore()
+			}
+			m.mcpStore.Add(request.TimestampOrNow(), request.Success)
 		}
 		m.counted[request.ID] = request.TimestampOrNow()
 	}
@@ -563,17 +672,21 @@ func (m *Model) applyEvent(event gomodel.Event) {
 }
 
 func (m *Model) prune(now time.Time) {
-	before := now.Add(-m.logRetention)
-	logs := m.logs[:0]
-	for _, row := range m.logs {
+	before := now.Add(-historyRetention)
+	if !m.historyCoveredFrom.IsZero() && m.historyCoveredFrom.Before(before) {
+		m.historyCoveredFrom = before
+	}
+	if m.allLogs == nil {
+		m.allLogs = append([]gomodel.Request(nil), m.logs...)
+	}
+	logs := m.allLogs[:0]
+	for _, row := range m.allLogs {
 		if !row.TimestampOrNow().Before(before) {
 			logs = append(logs, row)
 		}
 	}
-	m.logs = logs
-	m.selected = min(m.selected, max(0, len(m.logs)-1))
-	m.logOffset = min(m.logOffset, max(0, len(m.logs)-visibleLogRows(m.height)))
-	m.rebuildLogIndex()
+	m.allLogs = logs
+	m.refreshVisibleLogs()
 	for id, at := range m.counted {
 		if at.Before(before) {
 			delete(m.counted, id)
@@ -581,7 +694,11 @@ func (m *Model) prune(now time.Time) {
 	}
 	m.reducer.Prune(before)
 	m.store.Prune(before)
+	if m.mcpStore != nil {
+		m.mcpStore.Prune(before)
+	}
 	m.latencyStore.Prune(before)
+	m.prunePreviewState()
 }
 
 func requestLatencySamples(rows []gomodel.Request) []latency.Sample {
@@ -615,9 +732,16 @@ func (m Model) View() string {
 	chartHeight := chartAreaHeight(m.height)
 	axisWidth := chartAxisMinimumWidth
 	var buckets []chart.Bucket
+	now := time.Now()
 	for range 3 {
-		chartWidth := max(1, m.width-axisWidth)
-		buckets = m.store.Snapshot(time.Now(), m.window, chartWidth)
+		chartWidth := max(1, (m.width-axisWidth+1)/2)
+		buckets = m.store.Snapshot(now, m.window, chartWidth)
+		if m.includeMCP && m.mcpStore != nil {
+			for index, bucket := range m.mcpStore.Snapshot(now, m.window, chartWidth) {
+				buckets[index].Success += bucket.Success
+				buckets[index].Errors += bucket.Errors
+			}
+		}
 		nextAxisWidth := chartAxisWidth(chartScale(chart.MaxTotal(buckets)))
 		if nextAxisWidth == axisWidth {
 			break
@@ -635,6 +759,11 @@ func (m Model) View() string {
 	}
 	summary := fmt.Sprintf("[%s: ✅ %d / 🚫 %d]", windowLabel(m.window), success, errors)
 	left := dot + " " + lipgloss.NewStyle().Bold(true).Render("GoModel") + " " + summary
+	if m.includeMCP {
+		left += " MCP:on"
+	} else {
+		left += " MCP:off"
+	}
 	followLabel := "follow:on"
 	if !m.following {
 		followLabel = "follow:off"
@@ -660,10 +789,11 @@ func (m Model) View() string {
 
 func chartHeaderLegend(width int, followLabel string) string {
 	for _, candidate := range []string{
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  l latency  u usage  m: mcp  q quit",
-		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  l latency  u usage  m: mcp",
-		"1-7 window  +/- zoom  l latency  u usage  m: mcp",
-		"1-7 window  l/u/m views",
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  space " + followLabel + "  ↑↓ select  Enter JSON  / search  M toggle MCP  l latency  u usage  m: mcp  q quit",
+		"1-7 window 5m/15m/1h/3h/6h/12h/24h  +/- zoom  M toggle MCP  l latency  u usage  m: mcp",
+		"1-7 window  +/- zoom  M toggle MCP  l latency  u usage  m: mcp",
+		"1-7 window  M toggle MCP  l/u/m views",
+		"1-7 window  M MCP",
 		"1-7 window",
 	} {
 		if lipgloss.Width(candidate) <= width {
@@ -695,9 +825,19 @@ func (m Model) renderLogs(width int) string {
 		}
 		responseTimeRendered := mutedStyle.Render("-")
 		responseTimeSuffix := ""
-		if request.Duration > 0 {
-			responseTime := fmt.Sprintf("%.1f", float64(request.Duration)/float64(time.Millisecond))
-			responseTimeRendered = responseTimeStyle(request.Duration).Render(responseTime)
+		duration := request.Duration
+		if !request.Terminal {
+			startedAt := request.StartedAt
+			if startedAt.IsZero() {
+				startedAt = request.Timestamp
+			}
+			if !startedAt.IsZero() {
+				duration = time.Since(startedAt)
+			}
+		}
+		if duration > 0 {
+			responseTime := fmt.Sprintf("%.1f", float64(duration)/float64(time.Millisecond))
+			responseTimeRendered = responseTimeStyle(duration).Render(responseTime)
 			responseTimeSuffix = mutedStyle.Render("ms")
 		}
 		arrow := mutedStyle.Render(" -> ")
@@ -723,7 +863,7 @@ func (m Model) renderLogs(width int) string {
 		if target != "" {
 			prefix += arrow + target
 		}
-		prefix += " " + mutedStyle.Render("i:") + fmt.Sprintf("%d", request.InputTokens) + " " + mutedStyle.Render("o:") + fmt.Sprintf("%d", request.OutputTokens) + " " + mutedStyle.Render("c:") + fmt.Sprintf("%.0f%%", request.CacheRatio*100) + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
+		prefix += " " + mutedStyle.Render("i:") + formatTokens(request.InputTokens, request.InputTokensKnown) + " " + mutedStyle.Render("o:") + formatTokens(request.OutputTokens, request.OutputTokensKnown) + " " + mutedStyle.Render("c:") + formatCache(request.CacheRatio, request.CacheRatioKnown) + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
 		if request.IsMCP() {
 			prefix = icon + " " + mutedStyle.Render(timestamp) + " " + path + " " + popupToolStyle.Render("MCP") + " " + request.MCPAction() + " " + statusStyle(status).Render(status) + " " + responseTimeRendered + responseTimeSuffix
 		}
@@ -800,6 +940,8 @@ func (m *Model) moveSelection(delta int) {
 func popupRows(height int) int { return max(1, height-1) }
 
 func (m *Model) openPopup(request gomodel.Request) {
+	m.cancelPopupDetail()
+	m.popupRecord = request
 	m.popup = true
 	m.popupOffset = 0
 	m.popupRaw = false
@@ -853,9 +995,9 @@ func (m Model) renderPopup() string {
 	start := min(m.popupOffset, max(0, len(lines)-rows))
 	end := min(len(lines), start+rows)
 	thumbStart, thumbEnd := scrollbarThumb(rows, len(lines), start)
-	header := "Request structured  (r raw JSON  Enter expand/collapse  Space all  Esc close)"
+	header := "Request structured  (r raw JSON  R reload content  Enter expand/collapse  Space all  Esc close)"
 	if m.popupRaw {
-		header = "Raw JSON  (r structured view  Home/End  ↑↓/PgUp/PgDn scroll  Esc close)"
+		header = "Raw JSON  (r structured view  R reload content  Home/End  ↑↓/PgUp/PgDn scroll  Esc close)"
 	}
 	if m.popupLoading {
 		header = "Loading full request and response content…"
@@ -1046,11 +1188,14 @@ func highlightJSONLine(line string) string {
 }
 
 func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {
-	start := len(m.logs)
-	filtered := make([]gomodel.Request, 0, len(m.logs)+len(rows))
-	for _, row := range m.logs {
+	if m.allLogs == nil {
+		m.allLogs = append([]gomodel.Request(nil), m.logs...)
+	}
+	start := len(m.allLogs)
+	filtered := make([]gomodel.Request, 0, len(m.allLogs)+len(rows))
+	for _, row := range m.allLogs {
 		if row.ID == logicalID || strings.HasPrefix(row.ID, logicalID+"/attempt-") {
-			if start == len(m.logs) {
+			if start == len(m.allLogs) {
 				start = len(filtered)
 			}
 			continue
@@ -1061,8 +1206,8 @@ func (m *Model) replaceRequestRows(logicalID string, rows []gomodel.Request) {
 		start = len(filtered)
 	}
 	filtered = append(filtered[:start], append(rows, filtered[start:]...)...)
-	m.logs = filtered
-	m.rebuildLogIndex()
+	m.allLogs = filtered
+	m.refreshVisibleLogs()
 }
 
 func (m *Model) rebuildLogIndex() {

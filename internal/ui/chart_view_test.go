@@ -9,9 +9,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func TestRenderChartScalesAndPlotsBrailleArea(t *testing.T) {
+func TestRenderChartScalesAndPlotsStackedBars(t *testing.T) {
 	got := renderChart([]chart.Bucket{{Success: 2, Errors: 1}}, 20, 5)
-	if !strings.Contains(got, "─┤5") || !containsBraille(got) {
+	if !strings.Contains(got, "─┤5") || !strings.ContainsAny(got, "█▄▀") {
 		t.Fatalf("expected scaled trace:\n%s", got)
 	}
 	if lines := strings.Count(got, "\n"); lines != 5 {
@@ -43,22 +43,6 @@ func TestRenderChartXAxisShowsStartMidpointAndNow(t *testing.T) {
 			t.Fatalf("x axis %q missing %q", got, want)
 		}
 	}
-}
-
-func TestExpandChartBucketsUsesBothBrailleColumnsForOneTimeBin(t *testing.T) {
-	got := expandChartBuckets([]chart.Bucket{{Success: 3}})
-	if len(got) != 2 || got[0].Success != 3 || got[1].Success != 3 {
-		t.Fatalf("expanded buckets=%+v", got)
-	}
-}
-
-func containsBraille(text string) bool {
-	for _, value := range text {
-		if value >= 0x2800 && value <= 0x28FF {
-			return true
-		}
-	}
-	return false
 }
 
 func TestChartScaleRoundsUp(t *testing.T) {

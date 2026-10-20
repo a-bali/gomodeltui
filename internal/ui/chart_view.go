@@ -31,9 +31,8 @@ var popupValueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
 const chartAxisMinimumWidth = 3
 
-// renderChart draws a compact btop-inspired Braille area graph. Each terminal
-// cell holds two time slices and four vertical dots, making activity changes
-// legible without falling back to block bars.
+// renderChart draws separate stacked bars: successful attempts below failures.
+// Half-block cells preserve both outcomes at the boundary between the stacks.
 func renderChart(buckets []chart.Bucket, width, height int) string {
 	if width < 1 || height < 1 {
 		return ""
@@ -41,10 +40,10 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	scale := chartScale(chart.MaxTotal(buckets))
 	axisWidth := min(chartAxisWidth(scale), max(0, width-1))
 	graphWidth := max(1, width-axisWidth)
-	if len(buckets) > graphWidth {
-		buckets = buckets[len(buckets)-graphWidth:]
+	columns := (graphWidth + 1) / 2
+	if len(buckets) > columns {
+		buckets = buckets[len(buckets)-columns:]
 	}
-	graph, errors := brailleArea(expandChartBuckets(buckets), graphWidth, height, scale)
 	ticks := map[int]int{0: scale, height - 1: 0}
 	if height >= 4 {
 		ticks[(height-1)/2] = scale / 2
@@ -52,14 +51,12 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	var lines []string
 	for row := 0; row < height; row++ {
 		var line strings.Builder
-		for column, glyph := range graph[row] {
-			if glyph == ' ' {
+		for column := 0; column < graphWidth; column++ {
+			if column%2 != 0 || column/2 >= len(buckets) {
 				line.WriteByte(' ')
-			} else if errors[row][column] {
-				line.WriteString(errorStyle.Render(string(glyph)))
-			} else {
-				line.WriteString(successStyle.Render(string(glyph)))
+				continue
 			}
+			line.WriteString(stackedBarCell(buckets[column/2], row, height, scale))
 		}
 		if axisWidth > 0 {
 			line.WriteString(mutedStyle.Render(chartAxis(ticks, row, axisWidth)))
@@ -70,12 +67,47 @@ func renderChart(buckets []chart.Bucket, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-func expandChartBuckets(buckets []chart.Bucket) []chart.Bucket {
-	result := make([]chart.Bucket, 0, len(buckets)*2)
-	for _, bucket := range buckets {
-		result = append(result, bucket, bucket)
+func stackedBarCell(bucket chart.Bucket, row, height, scale int) string {
+	if bucket.Total() == 0 {
+		return " "
 	}
-	return result
+	units := height * 2
+	total := min(units, max(1, int(math.Round(float64(bucket.Total())/float64(scale)*float64(units)))))
+	failed := 0
+	if bucket.Errors > 0 {
+		failed = max(1, int(math.Round(float64(bucket.Errors)/float64(scale)*float64(units))))
+	}
+	if bucket.Success > 0 && failed > 0 {
+		total = min(units, max(2, total))
+		failed = min(failed, total-1)
+	}
+	failed = min(total, failed)
+	success := total - failed
+	colorAt := func(unit int) int {
+		if unit < success {
+			return 1
+		}
+		if unit < total {
+			return 2
+		}
+		return 0
+	}
+	lower := colorAt((height - 1 - row) * 2)
+	upper := colorAt((height-1-row)*2 + 1)
+	if upper == 0 && lower == 0 {
+		return " "
+	}
+	style := successStyle
+	if lower == 2 || upper == 2 {
+		style = errorStyle
+	}
+	if upper == lower {
+		return style.Render("█")
+	}
+	if upper == 0 {
+		return style.Render("▄")
+	}
+	return errorStyle.Background(lipgloss.Color("42")).Render("▀")
 }
 
 func chartAxisWidth(scale int) int {
@@ -91,46 +123,6 @@ func chartAxis(ticks map[int]int, row, width int) string {
 		return fmt.Sprintf("─┤%*d", width-2, value)
 	}
 	return " │" + strings.Repeat(" ", width-2)
-}
-
-func brailleArea(buckets []chart.Bucket, width, height, scale int) ([][]rune, [][]bool) {
-	result := make([][]rune, height)
-	errors := make([][]bool, height)
-	bits := make([][]uint8, height)
-	for row := range result {
-		result[row] = make([]rune, width)
-		errors[row] = make([]bool, width)
-		bits[row] = make([]uint8, width)
-	}
-	brailleBits := [2][4]uint8{{1, 2, 4, 64}, {8, 16, 32, 128}}
-	pixelHeight := height * 4
-	for index, bucket := range buckets {
-		column := index / 2
-		if column >= width {
-			break
-		}
-		side := index % 2
-		filled := int(math.Round(float64(bucket.Total()) / float64(scale) * float64(pixelHeight)))
-		filled = min(pixelHeight, filled)
-		for pixel := 0; pixel < filled; pixel++ {
-			fromTop := pixelHeight - 1 - pixel
-			row, dot := fromTop/4, fromTop%4
-			bits[row][column] |= brailleBits[side][dot]
-			if bucket.Errors > 0 {
-				errors[row][column] = true
-			}
-		}
-	}
-	for row := range result {
-		for column, value := range bits[row] {
-			if value != 0 {
-				result[row][column] = rune(0x2800) + rune(value)
-			} else {
-				result[row][column] = ' '
-			}
-		}
-	}
-	return result, errors
 }
 
 func chartScale(value int) int {

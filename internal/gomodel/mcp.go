@@ -37,6 +37,9 @@ func decodeMCPBody(raw json.RawMessage) map[string]any {
 }
 
 func (r Request) MCPAction() string {
+	if r.MCPActionLabel != "" {
+		return r.MCPActionLabel
+	}
 	body, _ := MCPBodies(r.RawJSON)
 	method, _ := body["method"].(string)
 	if method == "" {
@@ -50,4 +53,21 @@ func (r Request) MCPAction() string {
 		method = r.Endpoint
 	}
 	return method
+}
+
+func (r *Request) captureMCP(raw string) {
+	body, response := MCPBodies(raw)
+	method, _ := body["method"].(string)
+	params, _ := body["params"].(map[string]any)
+	if name, _ := params["name"].(string); name != "" {
+		method += " " + name
+	}
+	if strings.TrimSpace(method) != "" {
+		r.MCPActionLabel = strings.TrimSpace(method)
+	}
+	if response != nil {
+		result, _ := response["result"].(map[string]any)
+		toolError, _ := result["isError"].(bool)
+		r.MCPResultKnown, r.MCPFailed = true, response["error"] != nil || toolError
+	}
 }

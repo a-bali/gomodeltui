@@ -29,7 +29,10 @@ func NewClient(baseURL, token string, httpClient *http.Client) (*Client, error) 
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &Client{baseURL: baseURL, token: token, http: httpClient}, nil
+	// Keep authenticated API and body lookups at the configured endpoint.
+	local := *httpClient
+	local.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Client{baseURL: baseURL, token: token, http: &local}, nil
 }
 
 func (c *Client) do(ctx context.Context, path string, headers http.Header) (*http.Response, error) {
@@ -78,8 +81,8 @@ func (c *Client) LiveLogs(ctx context.Context, lastEventID string) (*http.Respon
 // locally as well to honour the caller's exact retention window.
 func (c *Client) AuditLogs(ctx context.Context, start time.Time) ([]Event, error) {
 	query := url.Values{
-		"start_date": {start.Format("2006-01-02")},
-		"end_date":   {time.Now().Format("2006-01-02")},
+		"start_date": {start.UTC().Format("2006-01-02")},
+		"end_date":   {time.Now().UTC().Format("2006-01-02")},
 		"limit":      {"100"},
 	}
 	var events []Event
@@ -98,6 +101,7 @@ func (c *Client) AuditLogs(ctx context.Context, start time.Time) ([]Event, error
 		if err != nil {
 			return nil, fmt.Errorf("decode GoModel audit log: %w", err)
 		}
+		crossedStart := false
 		for _, entry := range page.Entries {
 			event, timestamp, err := auditLogEvent(entry)
 			if err != nil {
@@ -105,10 +109,12 @@ func (c *Client) AuditLogs(ctx context.Context, start time.Time) ([]Event, error
 			}
 			if !timestamp.Before(start) {
 				events = append(events, event)
+			} else {
+				crossedStart = true
 			}
 		}
 		offset += len(page.Entries)
-		if len(page.Entries) == 0 || offset >= page.Total {
+		if crossedStart || len(page.Entries) == 0 || offset >= page.Total {
 			return events, nil
 		}
 	}
@@ -148,5 +154,5 @@ func auditLogEvent(entry json.RawMessage) (Event, time.Time, error) {
 	if err != nil {
 		return Event{}, time.Time{}, fmt.Errorf("encode GoModel audit entry: %w", err)
 	}
-	return Event{Event: "audit.completed", Data: payload}, header.Timestamp, nil
+	return Event{Event: "audit.completed", Data: payload, Historical: true}, header.Timestamp, nil
 }

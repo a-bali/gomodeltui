@@ -13,7 +13,11 @@ import (
 // details update the same calls without maintaining a second copy of history.
 func (m Model) mcpSummaries() []latency.Summary {
 	byMethod := make(map[string]*latency.Summary)
-	for _, request := range m.logs {
+	logs := m.allLogs
+	if logs == nil {
+		logs = m.logs
+	}
+	for _, request := range logs {
 		if !request.IsMCP() || !request.Terminal {
 			continue
 		}
@@ -27,7 +31,7 @@ func (m Model) mcpSummaries() []latency.Summary {
 		_, response := gomodel.MCPBodies(request.RawJSON)
 		result, _ := response["result"].(map[string]any)
 		toolError, _ := result["isError"].(bool)
-		if request.Success && response["error"] == nil && !toolError {
+		if request.Success && response["error"] == nil && !toolError && !request.MCPFailed {
 			s.Success++
 		} else {
 			s.Errors++
@@ -51,7 +55,7 @@ func (m Model) mcpSummaries() []latency.Summary {
 }
 
 func (m Model) renderMCPScreen() string {
-	header := lipgloss.NewStyle().Bold(true).Render("MCP methods") + mutedStyle.Render(fmt.Sprintf("  retained %s  m/Esc back  ↑↓/PgUp/PgDn scroll  Home/End", m.logRetention))
+	header := lipgloss.NewStyle().Bold(true).Render("MCP methods") + mutedStyle.Render("  last 24h  m/Esc back  ↑↓/PgUp/PgDn scroll  Home/End")
 	summaries := m.mcpSummaries()
 	if len(summaries) == 0 {
 		return header + "\n\n" + mutedStyle.Render("No completed MCP calls observed yet.")
