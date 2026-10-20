@@ -16,10 +16,6 @@
 #
 # Run `gomodeltui --help` for the complete option list.
 
-# How long the TUI keeps request history in memory. Accepts any positive Go
-# duration, for example 30m, 6h, or 24h. Defaults to 24h.
-log_retention: 24h
-
 gomodel:
   # Base URL of the GoModel instance. Defaults to http://localhost:8080.
   url: http://localhost:8080
@@ -45,3 +41,17 @@ providers:
   # when that file exists, so setting this is usually unnecessary.
   # codex:
   #   auth_path: ~/.codex/auth.json
+
+  # OpenRouter (OPENROUTER_API_KEY). Also accepts PROVIDERS_OPENROUTER_API_KEY.
+  # openrouter:
+  #   api_key: sk-or-v1-...
+
+  # DeepSeek (DEEPSEEK_API_KEY). Also accepts PROVIDERS_DEEPSEEK_API_KEY.
+  # deepseek:
+  #   api_key: sk-...
+
+  # Xiaomi MiMo (MIMO_COOKIE). Also accepts PROVIDERS_MIMO_COOKIE or
+  # XIAOMI_MIMO_COOKIE. Copy a Cookie header from the signed-in MiMo console;
+  # the required cookies are api-platform_serviceToken and userId.
+  # mimo:
+  #   cookie: "api-platform_serviceToken=…; userId=…"

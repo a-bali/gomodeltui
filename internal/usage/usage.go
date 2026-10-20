@@ -25,6 +25,7 @@ type Snapshot struct {
 	Source        string
 	Windows       []Window
 	Credits       string
+	Details       []string
 	CreditResetAt time.Time
 	Updated       time.Time
 }
@@ -53,8 +54,19 @@ func Available(providers config.ProvidersConfig) []Fetcher {
 			fetchers = append(fetchers, Codex{AuthPath: path, Client: http.DefaultClient})
 		}
 	}
+	if key := firstNonEmpty(providers.OpenRouter.APIKey); key != "" {
+		fetchers = append(fetchers, OpenRouter{APIKey: key, Client: http.DefaultClient})
+	}
+	if key := firstNonEmpty(providers.DeepSeek.APIKey); key != "" {
+		fetchers = append(fetchers, DeepSeek{APIKey: key, Client: http.DefaultClient})
+	}
+	if cookie := strings.TrimSpace(providers.MiMo.Cookie); cookie != "" {
+		fetchers = append(fetchers, MiMo{Cookie: cookie})
+	}
 	return fetchers
 }
+
+func firstNonEmpty(value string) string { return strings.TrimSpace(value) }
 
 type OpenCodeGo struct {
 	APIKey string

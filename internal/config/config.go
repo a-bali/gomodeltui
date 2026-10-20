@@ -45,6 +45,15 @@ type CommandCodeConfig struct {
 type CodexConfig struct {
 	AuthPath string `yaml:"auth_path"`
 }
+type OpenRouterConfig struct {
+	APIKey string `yaml:"api_key"`
+}
+type DeepSeekConfig struct {
+	APIKey string `yaml:"api_key"`
+}
+type MiMoConfig struct {
+	Cookie string `yaml:"cookie"`
+}
 
 type option struct {
 	key, env string
@@ -74,6 +83,19 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 			*option.value = value
 		}
 	}
+	for _, alias := range []struct {
+		env   string
+		value *string
+	}{
+		{"PROVIDERS_OPENROUTER_API_KEY", &cfg.Providers.OpenRouter.APIKey},
+		{"PROVIDERS_DEEPSEEK_API_KEY", &cfg.Providers.DeepSeek.APIKey},
+		{"PROVIDERS_MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
+		{"XIAOMI_MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
+	} {
+		if value := strings.TrimSpace(getenv(alias.env)); value != "" {
+			*alias.value = value
+		}
+	}
 	if err := applyFlags(args, options); err != nil {
 		return Config{}, err
 	}
@@ -94,23 +116,27 @@ Configuration is loaded in this order (later sources override earlier ones):
 
 Options:
   --config PATH                       YAML configuration file
-  --log_retention DURATION            In-memory history duration (default: 24h)
   --gomodel.url URL                   GoModel URL (default: http://localhost:8080)
   --gomodel.api_key KEY               GoModel API key (required)
   --providers.opencode.api_key KEY    OpenCode Go API key
   --providers.commandcode.cookie TEXT Command Code Cookie header or session token
   --providers.codex.auth_path PATH    Codex auth.json path
+  --providers.openrouter.api_key KEY  OpenRouter API key
+  --providers.deepseek.api_key KEY    DeepSeek API key
+  --providers.mimo.cookie TEXT        Xiaomi MiMo browser Cookie header
   -v, --version                       Show version and exit
   -h, --help                          Show this help
 
 Environment mapping:
   GOMODELTUI_CONFIG
-  LOG_RETENTION
   GOMODEL_URL
   GOMODEL_API_KEY
   PROVIDERS_OPENCODE_API_KEY
   PROVIDERS_COMMANDCODE_COOKIE
   PROVIDERS_CODEX_AUTH_PATH
+  OPENROUTER_API_KEY (or PROVIDERS_OPENROUTER_API_KEY)
+  DEEPSEEK_API_KEY (or PROVIDERS_DEEPSEEK_API_KEY)
+  MIMO_COOKIE (or PROVIDERS_MIMO_COOKIE, XIAOMI_MIMO_COOKIE)
 
 `
 }
@@ -167,12 +193,14 @@ func readFile(path string, required bool) (Config, error) {
 
 func optionsFor(cfg *Config) []option {
 	return []option{
-		{"log_retention", "LOG_RETENTION", &cfg.LogRetention},
 		{"gomodel.url", "GOMODEL_URL", &cfg.GoModel.URL},
 		{"gomodel.api_key", "GOMODEL_API_KEY", &cfg.GoModel.APIKey},
 		{"providers.opencode.api_key", "PROVIDERS_OPENCODE_API_KEY", &cfg.Providers.OpenCode.APIKey},
 		{"providers.commandcode.cookie", "PROVIDERS_COMMANDCODE_COOKIE", &cfg.Providers.CommandCode.Cookie},
 		{"providers.codex.auth_path", "PROVIDERS_CODEX_AUTH_PATH", &cfg.Providers.Codex.AuthPath},
+		{"providers.openrouter.api_key", "OPENROUTER_API_KEY", &cfg.Providers.OpenRouter.APIKey},
+		{"providers.deepseek.api_key", "DEEPSEEK_API_KEY", &cfg.Providers.DeepSeek.APIKey},
+		{"providers.mimo.cookie", "MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
 	}
 }
 
@@ -206,6 +234,9 @@ func validate(cfg Config) (Config, error) {
 	cfg.Providers.OpenCode.APIKey = strings.TrimSpace(cfg.Providers.OpenCode.APIKey)
 	cfg.Providers.CommandCode.Cookie = strings.TrimSpace(cfg.Providers.CommandCode.Cookie)
 	cfg.Providers.Codex.AuthPath = strings.TrimSpace(cfg.Providers.Codex.AuthPath)
+	cfg.Providers.OpenRouter.APIKey = strings.TrimSpace(cfg.Providers.OpenRouter.APIKey)
+	cfg.Providers.DeepSeek.APIKey = strings.TrimSpace(cfg.Providers.DeepSeek.APIKey)
+	cfg.Providers.MiMo.Cookie = strings.TrimSpace(cfg.Providers.MiMo.Cookie)
 	if strings.HasPrefix(cfg.Providers.Codex.AuthPath, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
