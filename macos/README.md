@@ -24,6 +24,13 @@ for the build machine's architecture. The DMG at
 Developer ID signing and notarization are not part of this build, so macOS may
 require opening it from Privacy & Security on first launch.
 
+If macOS blocks the downloaded app, and you trust the DMG source, remove its
+quarantine attribute after moving it to Applications:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/GoModel.app
+```
+
 Use **Start at login** in the menu bar icon's right-click menu to register the
 app as a macOS login item. macOS may require approval in System Settings.
 
