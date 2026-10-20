@@ -19,7 +19,7 @@ Hard constraints:
 
 ## Tech stack
 
-- Go 1.23+ (see `go.mod`), standard layout with `cmd/` + `internal/`.
+- Go 1.26+ (see `go.mod`), standard layout with `cmd/` + `internal/`.
 - [Bubble Tea](https://github.com/charmbracelet/bubbletea) (Elm-style
   `Update`/`Msg` loop) for the TUI, Lip Gloss for styling, `charmbracelet/x/ansi`
   for ANSI handling.

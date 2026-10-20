@@ -137,7 +137,7 @@ See the [macOS app guide](macos/README.md) for configuration and usage details.
 - A reachable GoModel instance with an admin API key that can read
   `/admin/live/logs`, `/admin/audit/log`, and `/admin/audit/detail`.
 - A terminal with 256-colour or truecolour support.
-- Go 1.23 or newer to build from source (or the provided Nix dev shell).
+- Go 1.26 or newer to build from source (or the provided Nix dev shell).
 
 ## Installation
 

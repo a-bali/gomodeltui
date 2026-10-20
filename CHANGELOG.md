@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Require Go 1.26 or newer and update the TUI rendering dependencies, including
+  Bubble Tea and the compatible ANSI/cell buffer packages.
+
 ## [1.1.0] - 2026-10-20
 
 ### Added
