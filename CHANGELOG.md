@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- TUI quota support for OpenRouter key limits and spend, optional credit
+  balances, DeepSeek balances, and Xiaomi MiMo balance and token-plan usage.
+- Native provider quota and balance display above the chart, including OpenCode
+  Go, Command Code, ChatGPT / Codex, OpenRouter, DeepSeek, and Xiaomi MiMo, with
+  remaining-quota bars, reset countdown tooltips, provider links, manual refresh,
+  and visible errors.
+- Optional native menu bar usage indicators for selected providers, with fixed
+  width status items, colored quota bars or balance amounts, and selections
+  stored in macOS preferences separately from the YAML configuration.
+- Native usage icons label each provider, order quota bars from shortest to
+  longest window, and show two-decimal balances in compact color-coded pills.
+- Native request rows show color-coded three-character session IDs, app-path
+  color pills, compact input/output/cache values, and ticking latency for pending
+  requests that finalizes when the response arrives.
+- Native request logs expand completed failovers into separate failed-attempt
+  and failover rows, matching the TUI.
+- TUI pending request latency refreshes every 0.1 seconds and freezes at the
+  measured elapsed time when a live response arrives without a duration field.
+- Removed the configurable `log_retention` setting; both apps use a fixed
+  24-hour in-memory history limit, which covers every available chart window.
+- TUI backfill now follows the selected chart window; widening the window loads
+  older audit history, and the request log displays that same time range.
+- TUI visible-row preview hydration and complete Enter inspection with audit-ID
+  lookup, bounded concurrent requests, cancellation, and `R` content retry.
+- TUI `M` toggle includes/excludes MCP in the main log, chart, and totals while
+  retaining separate MCP and model statistics; MCP is excluded by default.
+- Draggable native chart/log divider with a saved split position, minimum section
+  heights, keyboard adjustment, and double-click reset.
+- Resizable native dropdown with bottom-corner grips, keyboard resizing, saved
+  dimensions, and limits that keep it within the current display.
+- Subtle background highlighting for hovered native log rows, updated while
+  scrolling or receiving requests.
+- Native macOS menu bar app with a standard-width one-hour activity icon and
+  red error strip, a half-screen dropdown with a native stacked bar chart,
+  and compact colored request lines with usage, latency, and text previews.
+- Right-click controls for reconnect/config/quit, a connection status circle,
+  and a bottom-center Live button for returning from scrolling or time filters.
+- Native log MCP checkbox (off by default) and fixed width request text.
+- Native live log limited to the last hour with lazy scroll backfill, chart
+  click/drag time filters, on-demand history, and a Live reset control.
+- Clickable native log rows open a full JSON inspector with syntax colors,
+  indentation, collapsed child objects/arrays, and search with previous/next
+  navigation that reveals and highlights matches inside collapsed branches.
+- Native JSON inspector word-wrap checkbox, indented continuation lines,
+  and search navigation within wrapped values.
+- Native JSON inspector Expand All / Collapse All button and single-click
+  expansion/collapse anywhere on container rows.
+- Read-only native SSE monitoring and paginated history, reconnect/wake
+  recovery, existing YAML configuration support, and an offline demo mode.
+- `make macos` app packaging, `make macos-dmg` release packaging, `make
+  macos-test`, and macOS CI checks. Tag releases now attach a macOS DMG to the
+  GoReleaser draft alongside the TUI binaries and archives.
+
+### Fixed
+
+- TUI chart uses clock-aligned stacked green/red bars without idle rebinning.
+- TUI input/output tokens use comma separators and distinguish unknown from zero;
+  usage parsing includes nested prompt/completion tokens and cached-token ratios.
+- Content hydration preserves previews, viewport position, and live outcomes
+  without replaying terminal events or counting requests again.
+- Native MCP checkbox now includes MCP calls in both activity charts and request
+  totals as well as the log; MCP stays excluded by default.
+- Native log timestamps occupy a fixed-width, right-padded slot. Text tightening
+  and font scaling are disabled so backfilled rows keep the same spacing.
+- Native history loading fetches only intersecting UTC days and stops pagination
+  at the requested start time. Repeated pages and stalled loads surface an error
+  instead of leaving the loading message active indefinitely; cancellation and
+  live coverage updates clear stale loading status.
+- Native request log input/output token counts use comma thousands separators.
+- Native dropdown counts share the title row, using compact request/outcome
+  totals. A single bottom Live button replaces both previous return controls.
+- Chart selection reuses connected stream coverage instead of backfilling tiny
+  timer gaps; loading status clears once the displayed interval is covered.
+- Native activity charts use fixed clock-aligned buckets and skip unchanged
+  redraws, preventing idle jitter. Green/red stacked bars replace area fills.
+- Native log row tooltips removed; clickable rows show a pointing-hand cursor
+  that updates as rows change or scroll.
+- Native dropdown log fits its width and scrolls only vertically; horizontal
+  scrolling is available in the JSON popup when word wrapping is off.
+- Native JSON tree expansion preserves the clicked item's scroll position;
+  manual collapse is no longer undone by an active search.
+- Native log previews are restored lazily for visible requests when compact
+  audit history omits bodies, and preserved when late history enriches live rows.
+- Native request usage now updates from late `usage.*` events, preserving
+  token and cache values after completion without double-counting requests.
+
 ## [1.0.0] - 2026-10-08
 
 ### Added
