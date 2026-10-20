@@ -24,14 +24,31 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check for an existing release
+        id: existing_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: ${{ steps.existing_release.outputs.exists == 'true' && 'release --clean --skip=publish' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Replace assets on an existing release
+        if: steps.existing_release.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" dist/gomodeltui_*.tar.gz dist/gomodeltui_*.zip dist/checksums.txt --clobber
 
   macos-dmg:
     name: macOS DMG
@@ -44,7 +61,7 @@ jobs:
       - name: Package DMG
         run: make macos-dmg VERSION="${{ github.ref_name }}"
 
-      - name: Upload DMG to draft release
+      - name: Upload DMG to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.ref_name }}" "dist/GoModel_${{ github.ref_name }}_macOS.dmg" --clobber
