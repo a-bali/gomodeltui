@@ -102,7 +102,7 @@ struct NativeViewTests {
         var first = GoModelCore.RequestRecord(id: "first", timestamp: Date())
         first.inputTokens = 1234; first.outputTokens = 56; first.cacheRatio = 0.9
         let text = LogText.line(first).string
-        #expect(text.contains("i:1,234 o:56 c:90%"))
+        #expect(text.contains("1,234/56/90%"))
         let log = RequestLog(frame: NSRect(x: 0, y: 0, width: 720, height: 180))
         log.layoutSubtreeIfNeeded()
         let rows = (0..<40).map { GoModelCore.RequestRecord(id: "r-\($0)", timestamp: first.timestamp.addingTimeInterval(Double($0))) }
@@ -169,8 +169,7 @@ struct NativeViewTests {
         #expect(!log.scroll.hasHorizontalScroller)
         #expect(log.document.bounds.width == log.scroll.contentSize.width)
         let details = LogText.line(record, formattedTokens: true).string
-        #expect(details.contains("i:1,234,567"))
-        #expect(details.contains("o:89,012"))
+        #expect(details.contains("1,234,567/89,012/—"))
         #expect(details.contains(record.destinationModel))
     }
 }
