@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-21
+
 ### Added
 
 - Xiaomi MiMo quota fetching can refresh its short-lived console session
@@ -159,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release tooling: GitHub Actions CI and release workflows, GoReleaser
   configuration, and version metadata exposed via `--version`.
 
-[Unreleased]: https://github.com/a-bali/gomodeltui/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/a-bali/gomodeltui/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/a-bali/gomodeltui/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/a-bali/gomodeltui/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/a-bali/gomodeltui/releases/tag/v1.0.0
