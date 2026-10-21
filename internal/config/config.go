@@ -47,7 +47,8 @@ type DeepSeekConfig struct {
 	APIKey string `yaml:"api_key"`
 }
 type MiMoConfig struct {
-	Cookie string `yaml:"cookie"`
+	Cookie        string `yaml:"cookie"`
+	AccountCookie string `yaml:"account_cookie"`
 }
 
 type option struct {
@@ -86,6 +87,8 @@ func Load(args []string, getenv func(string) string) (Config, error) {
 		{"PROVIDERS_DEEPSEEK_API_KEY", &cfg.Providers.DeepSeek.APIKey},
 		{"PROVIDERS_MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
 		{"XIAOMI_MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
+		{"PROVIDERS_MIMO_ACCOUNT_COOKIE", &cfg.Providers.MiMo.AccountCookie},
+		{"XIAOMI_ACCOUNT_COOKIE", &cfg.Providers.MiMo.AccountCookie},
 	} {
 		if value := strings.TrimSpace(getenv(alias.env)); value != "" {
 			*alias.value = value
@@ -119,6 +122,9 @@ Options:
   --providers.openrouter.api_key KEY  OpenRouter API key
   --providers.deepseek.api_key KEY    DeepSeek API key
   --providers.mimo.cookie TEXT        Xiaomi MiMo browser Cookie header
+  --providers.mimo.account_cookie TEXT
+                                      Xiaomi Account userId/passToken cookies for
+                                      automatic MiMo session refresh
   -v, --version                       Show version and exit
   -h, --help                          Show this help
 
@@ -132,6 +138,7 @@ Environment mapping:
   OPENROUTER_API_KEY (or PROVIDERS_OPENROUTER_API_KEY)
   DEEPSEEK_API_KEY (or PROVIDERS_DEEPSEEK_API_KEY)
   MIMO_COOKIE (or PROVIDERS_MIMO_COOKIE, XIAOMI_MIMO_COOKIE)
+  MIMO_ACCOUNT_COOKIE (or PROVIDERS_MIMO_ACCOUNT_COOKIE, XIAOMI_ACCOUNT_COOKIE)
 
 `
 }
@@ -196,6 +203,7 @@ func optionsFor(cfg *Config) []option {
 		{"providers.openrouter.api_key", "OPENROUTER_API_KEY", &cfg.Providers.OpenRouter.APIKey},
 		{"providers.deepseek.api_key", "DEEPSEEK_API_KEY", &cfg.Providers.DeepSeek.APIKey},
 		{"providers.mimo.cookie", "MIMO_COOKIE", &cfg.Providers.MiMo.Cookie},
+		{"providers.mimo.account_cookie", "MIMO_ACCOUNT_COOKIE", &cfg.Providers.MiMo.AccountCookie},
 	}
 }
 
@@ -225,6 +233,7 @@ func validate(cfg Config) (Config, error) {
 	cfg.Providers.OpenRouter.APIKey = strings.TrimSpace(cfg.Providers.OpenRouter.APIKey)
 	cfg.Providers.DeepSeek.APIKey = strings.TrimSpace(cfg.Providers.DeepSeek.APIKey)
 	cfg.Providers.MiMo.Cookie = strings.TrimSpace(cfg.Providers.MiMo.Cookie)
+	cfg.Providers.MiMo.AccountCookie = strings.TrimSpace(cfg.Providers.MiMo.AccountCookie)
 	if strings.HasPrefix(cfg.Providers.Codex.AuthPath, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {

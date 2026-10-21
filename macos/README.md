@@ -62,13 +62,20 @@ files. File selection order:
 `--config`, `GOMODELTUI_CONFIG`, previously selected file, then the default path.
 
 `GOMODEL_URL` and `GOMODEL_API_KEY` override YAML values.
-`OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, and `MIMO_COOKIE` override the
-corresponding provider values. `PROVIDERS_OPENCODE_API_KEY`,
+`OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`, `MIMO_COOKIE`, and
+`MIMO_ACCOUNT_COOKIE` override the corresponding provider values. `PROVIDERS_OPENCODE_API_KEY`,
 `PROVIDERS_COMMANDCODE_COOKIE`, and `PROVIDERS_CODEX_AUTH_PATH` configure the
 other providers. Codex defaults to `~/.codex/auth.json` when that file exists.
 Finder launches normally do not inherit a terminal's environment, so use
 the YAML file or launch the executable from that terminal when using these
 variables. Config errors appear on the status circle's tooltip.
+
+MiMo console cookies expire after roughly a day. Set
+`providers.mimo.account_cookie` to the long-lived `userId`/`passToken` cookies
+from `account.xiaomi.com` (or `MIMO_ACCOUNT_COOKIE`) and the app refreshes the
+console session automatically. Refreshed cookies are kept in memory only and
+are never written to disk. Without the seed, an expired session reports an
+actionable error instead of a bare HTTP failure.
 
 Use the **Usage icons** submenu in the right-click menu to choose which
 configured providers get their own standard-width menu bar item. Quota items

@@ -240,6 +240,7 @@ Every dotted key is available in all three sources:
 | `providers.openrouter.api_key` | `OPENROUTER_API_KEY`, `PROVIDERS_OPENROUTER_API_KEY` | `--providers.openrouter.api_key` |
 | `providers.deepseek.api_key` | `DEEPSEEK_API_KEY`, `PROVIDERS_DEEPSEEK_API_KEY` | `--providers.deepseek.api_key` |
 | `providers.mimo.cookie` | `MIMO_COOKIE`, `PROVIDERS_MIMO_COOKIE`, `XIAOMI_MIMO_COOKIE` | `--providers.mimo.cookie` |
+| `providers.mimo.account_cookie` | `MIMO_ACCOUNT_COOKIE`, `PROVIDERS_MIMO_ACCOUNT_COOKIE`, `XIAOMI_ACCOUNT_COOKIE` | `--providers.mimo.account_cookie` |
 
 File selection uses `GOMODELTUI_CONFIG` or `--config PATH`. Unknown YAML keys
 are rejected so typos fail fast.
@@ -340,8 +341,19 @@ only when its credential is available:
   `userId`. The TUI reads the balance and token-plan usage endpoints. MiMo's
   inference API key does not authenticate these console endpoints.
 
+  Those console cookies last about a day. To keep the quota fresh without
+  re-copying them, also set `providers.mimo.account_cookie` to the long-lived
+  `userId` and `passToken` cookies from `account.xiaomi.com`. When MiMo rejects
+  the session, the TUI replays the same SSO exchange the browser uses, keeps
+  the refreshed cookies in memory, and retries once. With only
+  `account_cookie` configured, the first fetch bootstraps the platform session.
+  If Xiaomi revokes the seed or asks for interactive verification, the usage
+  screen reports that the session expired and asks you to sign in again; the
+  TUI never opens a browser or bypasses those checks.
+
 Credentials are read only. `gomodeltui` never writes them to disk and never
-modifies account state.
+modifies account state. Automatic MiMo refresh only re-authenticates the
+read-only usage session; the resulting cookies live in memory until exit.
 
 ## How it works
 

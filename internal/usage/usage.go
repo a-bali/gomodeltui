@@ -60,8 +60,8 @@ func Available(providers config.ProvidersConfig) []Fetcher {
 	if key := firstNonEmpty(providers.DeepSeek.APIKey); key != "" {
 		fetchers = append(fetchers, DeepSeek{APIKey: key, Client: http.DefaultClient})
 	}
-	if cookie := strings.TrimSpace(providers.MiMo.Cookie); cookie != "" {
-		fetchers = append(fetchers, MiMo{Cookie: cookie})
+	if cookie := strings.TrimSpace(providers.MiMo.Cookie); cookie != "" || strings.TrimSpace(providers.MiMo.AccountCookie) != "" {
+		fetchers = append(fetchers, &MiMo{Cookie: cookie, AccountCookie: strings.TrimSpace(providers.MiMo.AccountCookie)})
 	}
 	return fetchers
 }

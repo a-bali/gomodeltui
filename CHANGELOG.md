@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Xiaomi MiMo quota fetching can refresh its short-lived console session
+  automatically from an optional `providers.mimo.account_cookie` containing the
+  long-lived Xiaomi Account `userId`/`passToken` cookies, and reports an
+  actionable message when the session expires instead of a bare HTTP error.
+  The same automatic refresh is available in the macOS menu bar app.
+
 ### Changed
 
 - Require Go 1.26 or newer and update the TUI rendering dependencies, including

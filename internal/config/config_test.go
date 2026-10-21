@@ -65,3 +65,28 @@ func TestLoadHelpDoesNotRequireConfiguration(t *testing.T) {
 		t.Fatalf("help is missing configuration details:\n%s", help)
 	}
 }
+
+func TestLoadMiMoAccountCookieFromEnvironmentAndFlag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{
+		"GOMODEL_API_KEY":               "key",
+		"PROVIDERS_MIMO_ACCOUNT_COOKIE": "userId=env; passToken=env-secret",
+	}
+	cfg, err := Load([]string{"--config=" + path}, func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Providers.MiMo.AccountCookie != "userId=env; passToken=env-secret" {
+		t.Fatalf("account cookie=%q", cfg.Providers.MiMo.AccountCookie)
+	}
+	cfg, err = Load([]string{"--config=" + path, "--providers.mimo.account_cookie=userId=flag; passToken=flag-secret"}, func(key string) string { return env[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Providers.MiMo.AccountCookie != "userId=flag; passToken=flag-secret" {
+		t.Fatalf("account cookie=%q", cfg.Providers.MiMo.AccountCookie)
+	}
+}

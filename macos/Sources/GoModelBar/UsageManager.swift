@@ -56,7 +56,7 @@ final class UsageManager {
         }
         let hasProvider = !configuration.openCodeAPIKey.isEmpty || !configuration.commandCodeCookie.isEmpty ||
             !configuration.codexAuthPath.isEmpty || !configuration.openRouterAPIKey.isEmpty ||
-            !configuration.deepSeekAPIKey.isEmpty || !configuration.miMoCookie.isEmpty
+            !configuration.deepSeekAPIKey.isEmpty || !configuration.miMoCookie.isEmpty || !configuration.miMoAccountCookie.isEmpty
         guard hasProvider else {
             presentation = UsagePresentation()
             changed?()
@@ -91,8 +91,8 @@ final class UsageManager {
             if !configuration.deepSeekAPIKey.isEmpty {
                 group.addTask { await fetchDeepSeek(configuration.deepSeekAPIKey) }
             }
-            if !configuration.miMoCookie.isEmpty {
-                group.addTask { await fetchMiMo(configuration.miMoCookie) }
+            if !configuration.miMoCookie.isEmpty || !configuration.miMoAccountCookie.isEmpty {
+                group.addTask { await fetchMiMo(configuration.miMoCookie, accountCookie: configuration.miMoAccountCookie) }
             }
             for await (_, quotas, balances) in group {
                 result.quotas += quotas
@@ -309,41 +309,6 @@ final class UsageManager {
             balanceUSD: isUSDCurrency(currency) ? amount : nil)])
     }
 
-    private static func fetchMiMo(_ cookie: String) async -> (String, [QuotaProvider], [BalanceProvider]) {
-        async let balanceResult = requestJSON("https://platform.xiaomimimo.com/api/v1/balance", cookie: cookie)
-        async let detailResult = requestJSON("https://platform.xiaomimimo.com/api/v1/tokenPlan/detail", cookie: cookie)
-        async let usageResult = requestJSON("https://platform.xiaomimimo.com/api/v1/tokenPlan/usage", cookie: cookie)
-        let (balanceData, balanceError) = await balanceResult
-        let (detailData, _) = await detailResult
-        let (usageData, _) = await usageResult
-        let page = URL(string: "https://platform.xiaomimimo.com/#/console/balance")!
-        guard let balanceData, let root = object(balanceData), number(root["code"]) == 0,
-              let data = root["data"] as? [String: Any] else {
-            return ("Xiaomi MiMo", [], [BalanceProvider(id: "mimo", name: "Xiaomi MiMo", balance: nil,
-                error: balanceError ?? "Invalid balance response", url: page)])
-        }
-        let currency = data["currency"] as? String ?? "CNY"
-        guard let balanceValue = optionalNumber(data["balance"]) else {
-            return ("Xiaomi MiMo", [], [BalanceProvider(id: "mimo", name: "Xiaomi MiMo", balance: nil,
-                error: "Invalid balance response", url: page)])
-        }
-        let amount = money(balanceValue, currency: currency)
-        var quotas: [UsageQuota] = []
-        if let usageData, let usageRoot = object(usageData), number(usageRoot["code"]) == 0,
-           let usage = usageRoot["data"] as? [String: Any], let month = usage["monthUsage"] as? [String: Any],
-           let items = month["items"] as? [[String: Any]], let item = items.first {
-            let used = number(item["used"]), limit = number(item["limit"])
-            if limit > 0 {
-                let usedPercent = item["percent"].map(number) ?? used / limit * 100
-                let reset = detailData.flatMap(object).flatMap { $0["data"] as? [String: Any] }.flatMap { $0["currentPeriodEnd"] as? String }.flatMap(parseMiMoDate)
-                quotas.append(UsageQuota(id: "mimo-month", label: "m", availablePercent: min(100, max(0, 100 - usedPercent)), resetsAt: reset))
-            }
-        }
-        return ("Xiaomi MiMo", quotas.isEmpty ? [] : [QuotaProvider(id: "mimo", name: "Xiaomi MiMo", quotas: quotas)],
-            [BalanceProvider(id: "mimo", name: "Xiaomi MiMo", balance: amount, error: nil, url: page,
-                balanceUSD: isUSDCurrency(currency) ? balanceValue : nil)])
-    }
-
     private static func requestJSON(_ address: String, bearer: String? = nil, cookie: String? = nil,
                                    origin: String? = nil, referer: String? = nil) async -> (Data?, String?) {
         guard let url = URL(string: address) else { return (nil, "Invalid provider URL") }
@@ -368,14 +333,14 @@ final class UsageManager {
         } catch { return (nil, error.localizedDescription) }
     }
 
-    private static func object(_ data: Data) -> [String: Any]? { (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] }
-    private static func optionalNumber(_ value: Any?) -> Double? {
+    static func object(_ data: Data) -> [String: Any]? { (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] }
+    static func optionalNumber(_ value: Any?) -> Double? {
         guard let value, !(value is NSNull) else { return nil }
         if let value = value as? NSNumber { return value.doubleValue }
         if let value = value as? String { return Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
         return nil
     }
-    private static func number(_ value: Any?) -> Double {
+    static func number(_ value: Any?) -> Double {
         optionalNumber(value) ?? 0
     }
     private static func date(_ value: Any?) -> Date? {
@@ -390,7 +355,7 @@ final class UsageManager {
         formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.date(from: string)
     }
-    private static func money(_ value: Double, currency: String) -> String {
+    static func money(_ value: Double, currency: String) -> String {
         let formatter = NumberFormatter(); formatter.numberStyle = .decimal
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.maximumFractionDigits = 2
@@ -406,10 +371,10 @@ final class UsageManager {
         }
         return "\(amount) \(symbol)"
     }
-    private static func isUSDCurrency(_ currency: String) -> Bool {
+    static func isUSDCurrency(_ currency: String) -> Bool {
         ["USD", "$", "US$"].contains(currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
     }
-    private static func parseMiMoDate(_ value: String) -> Date? {
+    static func parseMiMoDate(_ value: String) -> Date? {
         let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.date(from: value)

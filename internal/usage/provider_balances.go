@@ -3,11 +3,14 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -235,43 +238,55 @@ func parseDeepSeek(raw []byte) (Snapshot, error) {
 }
 
 type MiMo struct {
-	Cookie string
-	Client *http.Client
+	Cookie        string
+	AccountCookie string
+	Client        *http.Client
+
+	mu       sync.Mutex
+	platform map[string]string
+	account  map[string]string
 }
 
-func (MiMo) Provider() string { return "Xiaomi MiMo" }
+func (*MiMo) Provider() string { return "Xiaomi MiMo" }
 
-func (f MiMo) Fetch(ctx context.Context) (Snapshot, error) {
-	cookie := normalizeMiMoCookie(f.Cookie)
-	if !validMiMoCookie(cookie) {
-		return Snapshot{}, fmt.Errorf("Xiaomi MiMo requires api-platform_serviceToken and userId cookies")
+func (f *MiMo) Fetch(ctx context.Context) (Snapshot, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	client := mimoHTTPClient(f.Client)
+	platform := f.platformCookies()
+	account := f.accountCookies()
+
+	var (
+		data       map[string][]byte
+		balanceErr error
+		authFailed bool
+		err        error
+	)
+	if validMiMoCookies(platform) {
+		data, balanceErr, authFailed, err = f.fetchEndpoints(ctx, client, platform)
+		if err != nil {
+			return Snapshot{}, err
+		}
 	}
-	base := "https://platform.xiaomimimo.com/api/v1/"
-	type result struct {
-		endpoint string
-		body     []byte
-		err      error
-	}
-	results := make(chan result, 3)
-	for _, endpoint := range []string{"balance", "tokenPlan/detail", "tokenPlan/usage"} {
-		endpoint := endpoint
-		go func() {
-			body, err := getMiMoJSON(ctx, f.Client, base+endpoint, cookie)
-			results <- result{endpoint, body, err}
-		}()
-	}
-	data := make(map[string][]byte, 3)
-	var balanceErr error
-	for range 3 {
-		select {
-		case item := <-results:
-			if item.err == nil {
-				data[item.endpoint] = item.body
-			} else if item.endpoint == "balance" {
-				balanceErr = item.err
+	if authFailed || !validMiMoCookies(platform) {
+		if !hasMiMoAccountSeed(account) {
+			if !validMiMoCookies(platform) {
+				return Snapshot{}, fmt.Errorf("Xiaomi MiMo requires api-platform_serviceToken and userId cookies")
 			}
-		case <-ctx.Done():
-			return Snapshot{}, fmt.Errorf("Xiaomi MiMo usage: %w", ctx.Err())
+			return Snapshot{}, fmt.Errorf("Xiaomi MiMo session expired; sign in at %s/#/console/balance and update providers.mimo.cookie, or set providers.mimo.account_cookie for automatic refresh", mimoPlatformOrigin)
+		}
+		refreshed, refreshErr := refreshMiMoSession(ctx, client, platform, account)
+		if refreshErr != nil {
+			return Snapshot{}, fmt.Errorf("Xiaomi MiMo session expired and automatic refresh failed (%v); sign in at %s/#/console/balance and update providers.mimo.account_cookie", refreshErr, mimoPlatformOrigin)
+		}
+		f.platform, f.account = refreshed, account
+		data, balanceErr, authFailed, err = f.fetchEndpoints(ctx, client, refreshed)
+		if err != nil {
+			return Snapshot{}, err
+		}
+		if authFailed {
+			return Snapshot{}, fmt.Errorf("Xiaomi MiMo rejected the automatically refreshed session; sign in at %s/#/console/balance and update providers.mimo.account_cookie", mimoPlatformOrigin)
 		}
 	}
 	if balanceErr != nil {
@@ -282,10 +297,66 @@ func (f MiMo) Fetch(ctx context.Context) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	snapshot.Provider, snapshot.Source, snapshot.Updated = f.Provider(), "session cookie", time.Now()
+	if len(f.platform) > 0 {
+		snapshot.Source = "session cookie (auto-refreshed)"
+	}
 	return snapshot, nil
 }
 
-func getMiMoJSON(ctx context.Context, configured *http.Client, endpoint, cookie string) ([]byte, error) {
+func (f *MiMo) platformCookies() map[string]string {
+	if len(f.platform) > 0 {
+		return f.platform
+	}
+	return parseMiMoCookie(f.Cookie)
+}
+
+func (f *MiMo) accountCookies() map[string]string {
+	if len(f.account) > 0 {
+		return f.account
+	}
+	return parseMiMoCookie(f.AccountCookie)
+}
+
+func (f *MiMo) fetchEndpoints(ctx context.Context, client *http.Client, cookies map[string]string) (map[string][]byte, error, bool, error) {
+	base := "https://platform.xiaomimimo.com/api/v1/"
+	type result struct {
+		endpoint string
+		body     []byte
+		err      error
+	}
+	results := make(chan result, 3)
+	for _, endpoint := range []string{"balance", "tokenPlan/detail", "tokenPlan/usage"} {
+		endpoint := endpoint
+		go func() {
+			body, err := getMiMoJSON(ctx, client, base+endpoint, cookieHeader(cookies))
+			results <- result{endpoint, body, err}
+		}()
+	}
+	data := make(map[string][]byte, 3)
+	var balanceErr error
+	authFailed := false
+	for range 3 {
+		select {
+		case item := <-results:
+			if item.err == nil {
+				data[item.endpoint] = item.body
+				continue
+			}
+			var authErr mimoAuthError
+			if errors.As(item.err, &authErr) {
+				authFailed = true
+			}
+			if item.endpoint == "balance" {
+				balanceErr = item.err
+			}
+		case <-ctx.Done():
+			return nil, nil, false, fmt.Errorf("Xiaomi MiMo usage: %w", ctx.Err())
+		}
+	}
+	return data, balanceErr, authFailed, nil
+}
+
+func getMiMoJSON(ctx context.Context, client *http.Client, endpoint, cookie string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -297,11 +368,27 @@ func getMiMoJSON(ctx context.Context, configured *http.Client, endpoint, cookie 
 	req.Header.Set("Origin", "https://platform.xiaomimimo.com")
 	req.Header.Set("Referer", "https://platform.xiaomimimo.com/#/console/balance")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36")
-	client := configured
-	if client == nil {
-		client = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
 	}
-	return providerResponse(ctx, client, req, "Xiaomi MiMo")
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read Xiaomi MiMo response: %w", err)
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusFound {
+		return nil, mimoAuthError{fmt.Sprintf("Xiaomi MiMo returned HTTP %d", resp.StatusCode)}
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if root, decodeErr := decodeObject(body); decodeErr == nil {
+		if code, ok := numberValue(root["code"]); ok && code == 401 {
+			return nil, mimoAuthError{"Xiaomi MiMo rejected the session cookie"}
+		}
+	}
+	return body, nil
 }
 
 func parseMiMo(balanceRaw, detailRaw, usageRaw []byte) (Snapshot, error) {
@@ -408,17 +495,53 @@ func normalizeMiMoCookie(value string) string {
 	return value
 }
 
-func validMiMoCookie(value string) bool {
-	wanted := map[string]bool{"api-platform_servicetoken": false, "userid": false}
-	for _, part := range strings.Split(value, ";") {
+func parseMiMoCookie(value string) map[string]string {
+	cookies := make(map[string]string)
+	for _, part := range strings.Split(normalizeMiMoCookie(value), ";") {
 		key, val, ok := strings.Cut(strings.TrimSpace(part), "=")
-		if ok && strings.TrimSpace(val) != "" {
-			if _, found := wanted[strings.ToLower(strings.TrimSpace(key))]; found {
-				wanted[strings.ToLower(strings.TrimSpace(key))] = true
-			}
+		if !ok {
+			continue
+		}
+		key, val = strings.TrimSpace(key), strings.TrimSpace(val)
+		if key != "" {
+			cookies[key] = val
 		}
 	}
-	return wanted["api-platform_servicetoken"] && wanted["userid"]
+	return cookies
+}
+
+func cookieHeader(cookies map[string]string) string {
+	names := make([]string, 0, len(cookies))
+	for name := range cookies {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, name+"="+cookies[name])
+	}
+	return strings.Join(parts, "; ")
+}
+
+func cookieValue(cookies map[string]string, name string) (string, bool) {
+	for key, value := range cookies {
+		if strings.EqualFold(key, name) && strings.TrimSpace(value) != "" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+func validMiMoCookies(cookies map[string]string) bool {
+	_, serviceToken := cookieValue(cookies, "api-platform_serviceToken")
+	_, userID := cookieValue(cookies, "userId")
+	return serviceToken && userID
+}
+
+func hasMiMoAccountSeed(cookies map[string]string) bool {
+	_, userID := cookieValue(cookies, "userId")
+	_, passToken := cookieValue(cookies, "passToken")
+	return userID && passToken
 }
 
 func getProviderJSON(ctx context.Context, configured *http.Client, endpoint, token string, extra http.Header) ([]byte, error) {

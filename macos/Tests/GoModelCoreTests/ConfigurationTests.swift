@@ -42,4 +42,20 @@ struct ConfigurationTests {
             }
         }
     }
+
+    @Test func mimoCredentialsComeFromYAMLAndEnvironment() throws {
+        try withConfig("""
+        gomodel: {url: 'http://localhost:8080', api_key: token}
+        providers:
+          mimo:
+            cookie: 'api-platform_serviceToken=t; userId=1'
+            account_cookie: 'userId=1; passToken=p'
+        """) { path in
+            let config = try Configuration.load(path: path, environment: [:])
+            #expect(config.miMoCookie == "api-platform_serviceToken=t; userId=1")
+            #expect(config.miMoAccountCookie == "userId=1; passToken=p")
+            let override = try Configuration.load(path: path, environment: ["MIMO_ACCOUNT_COOKIE": "userId=2; passToken=q"])
+            #expect(override.miMoAccountCookie == "userId=2; passToken=q")
+        }
+    }
 }

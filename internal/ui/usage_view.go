@@ -30,7 +30,7 @@ func usageRefreshCmd(fetchers []usage.Fetcher, request uint64) tea.Cmd {
 func (m Model) renderUsageScreen() string {
 	header := lipgloss.NewStyle().Bold(true).Render("Provider usage") + mutedStyle.Render("  r: refresh  u: back  Esc: back")
 	if len(m.usageFetchers) == 0 {
-		return strings.Join([]string{header, "", mutedStyle.Render("No quota credentials found. Configure providers in YAML, or set OPENROUTER_API_KEY, DEEPSEEK_API_KEY, MIMO_COOKIE, PROVIDERS_OPENCODE_API_KEY, or PROVIDERS_COMMANDCODE_COOKIE; Codex sign-in is detected automatically.")}, "\n")
+		return strings.Join([]string{header, "", mutedStyle.Render("No quota credentials found. Configure providers in YAML, or set OPENROUTER_API_KEY, DEEPSEEK_API_KEY, MIMO_COOKIE, MIMO_ACCOUNT_COOKIE, PROVIDERS_OPENCODE_API_KEY, or PROVIDERS_COMMANDCODE_COOKIE; Codex sign-in is detected automatically.")}, "\n")
 	}
 	now := time.Now()
 	progressWidth := m.sharedUsageProgressWidth(now)

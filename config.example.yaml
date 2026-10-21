@@ -55,3 +55,10 @@ providers:
   # the required cookies are api-platform_serviceToken and userId.
   # mimo:
   #   cookie: "api-platform_serviceToken=…; userId=…"
+  #
+  # Optional automatic session refresh (MIMO_ACCOUNT_COOKIE). The platform
+  # cookies above expire after about a day. When the MiMo request is rejected,
+  # the TUI uses these long-lived Xiaomi Account cookies to mint a new session,
+  # just like the browser does. Copy userId and passToken from account.xiaomi.com.
+  # With only account_cookie set, the first fetch bootstraps the session.
+  #   account_cookie: "userId=…; passToken=…"

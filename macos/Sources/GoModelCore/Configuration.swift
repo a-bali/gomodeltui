@@ -10,9 +10,11 @@ public struct Configuration: Sendable {
     public let openRouterAPIKey: String
     public let deepSeekAPIKey: String
     public let miMoCookie: String
+    public let miMoAccountCookie: String
 
     public init(baseURL: URL, apiKey: String, openCodeAPIKey: String = "", commandCodeCookie: String = "",
-                codexAuthPath: String = "", openRouterAPIKey: String = "", deepSeekAPIKey: String = "", miMoCookie: String = "") {
+                codexAuthPath: String = "", openRouterAPIKey: String = "", deepSeekAPIKey: String = "", miMoCookie: String = "",
+                miMoAccountCookie: String = "") {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.openCodeAPIKey = openCodeAPIKey
@@ -21,6 +23,7 @@ public struct Configuration: Sendable {
         self.openRouterAPIKey = openRouterAPIKey
         self.deepSeekAPIKey = deepSeekAPIKey
         self.miMoCookie = miMoCookie
+        self.miMoAccountCookie = miMoAccountCookie
     }
 
     public static func defaultPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
@@ -79,7 +82,8 @@ public struct Configuration: Sendable {
             codexAuthPath: authPath,
             openRouterAPIKey: setting("OPENROUTER_API_KEY", openRouter["api_key"]).trimmingCharacters(in: .whitespacesAndNewlines),
             deepSeekAPIKey: setting("DEEPSEEK_API_KEY", deepSeek["api_key"]).trimmingCharacters(in: .whitespacesAndNewlines),
-            miMoCookie: setting("MIMO_COOKIE", miMo["cookie"]).trimmingCharacters(in: .whitespacesAndNewlines))
+            miMoCookie: setting("MIMO_COOKIE", miMo["cookie"]).trimmingCharacters(in: .whitespacesAndNewlines),
+            miMoAccountCookie: setting("MIMO_ACCOUNT_COOKIE", miMo["account_cookie"]).trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 
