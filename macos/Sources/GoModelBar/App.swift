@@ -534,7 +534,8 @@ private enum UsageStatusIcon {
 
     static func tooltip(for entry: UsageStatusEntry, refreshedAt: Date? = nil,
                         refreshing: Bool = false) -> String {
-        var lines = [entry.name]
+        let freshness = refreshing ? "refreshing…" : refreshedAgo(refreshedAt)
+        var lines = ["\(entry.name) (\(freshness))"]
         if let quota = entry.quota {
             lines += quota.quotas.map(quotaLine)
         }
@@ -547,19 +548,18 @@ private enum UsageStatusIcon {
                 lines.append("Balance unavailable")
             }
         }
-        lines.append(refreshing ? "Refreshing…" : refreshedAgo(refreshedAt))
         return lines.joined(separator: "\n")
     }
 
     private static func refreshedAgo(_ date: Date?) -> String {
-        guard let date else { return "Data not refreshed yet" }
+        guard let date else { return "not refreshed yet" }
         let seconds = max(0, Int(Date().timeIntervalSince(date)))
-        if seconds < 60 { return "Data refreshed just now" }
+        if seconds < 60 { return "just now" }
         let minutes = seconds / 60
-        if minutes < 60 { return "Data refreshed \(minutes)m ago" }
+        if minutes < 60 { return "\(minutes)m ago" }
         let hours = minutes / 60
-        if hours < 24 { return "Data refreshed \(hours)h \(minutes % 60)m ago" }
-        return "Data refreshed \(hours / 24)d ago"
+        if hours < 24 { return "\(hours)h \(minutes % 60)m ago" }
+        return "\(hours / 24)d ago"
     }
 
     private static func quotaLine(_ quota: UsageQuota) -> String {
