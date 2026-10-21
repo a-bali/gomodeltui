@@ -81,9 +81,14 @@ Use the **Usage icons** submenu in the right-click menu to choose which
 configured providers get their own standard-width menu bar item. Quota items
 show available-quota bars from shortest to longest window (for example, 5h,
 weekly, monthly); balance items show the amount in a dark, color-coded pill.
-Click any provider item to toggle the main dropdown. These choices are stored
-in macOS preferences (`UserDefaults`), not in the YAML config, and start with no
-additional provider icons selected.
+Hovering an icon lists every quota window with its exact available percentage
+and reset ETA, or the balance amount (or the fetch error) for balance-based
+providers, plus how long ago the data was refreshed. Usage data is refreshed
+at launch, every five minutes in the background, after system wake, and on
+demand from the refresh control. Click any provider item to toggle the main dropdown;
+right-click (or Control-click) it for the same menu as the main icon.
+These choices are stored in macOS preferences (`UserDefaults`), not in the YAML
+config, and start with no additional provider icons selected.
 
 ![Menu bar usage icons for DeepSeek, OpenRouter, OpenCode Go, ChatGPT, and request activity](../docs/gomodelbar-menu.png)
 

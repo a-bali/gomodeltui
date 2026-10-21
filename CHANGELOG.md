@@ -14,9 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-lived Xiaomi Account `userId`/`passToken` cookies, and reports an
   actionable message when the session expires instead of a bare HTTP error.
   The same automatic refresh is available in the macOS menu bar app.
+- The macOS menu bar icons show a custom hover tooltip with request activity,
+  connection status, and per-provider details: every quota window's exact
+  available percentage with a reset ETA, and balance amounts or fetch errors for
+  balance-based providers, along with how long ago the data was refreshed.
+  Right-clicking (or Control-clicking) any provider icon opens the same context
+  menu as the main menu bar icon.
 
 ### Changed
 
+- The macOS app refreshes provider quotas and balances every five minutes in the
+  background (and after system wake) in addition to manual refresh, keeping the
+  menu bar indicators and tooltips current.
 - Require Go 1.26 or newer and update the TUI rendering dependencies, including
   Bubble Tea and the compatible ANSI/cell buffer packages.
 

@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var iconBuckets: [ChartBucket]?
     private var iconConnected: Bool?
     private var usageStatusItems: [String: NSStatusItem] = [:]
+    private var usageTimer: Timer?
+    private let statusTooltip = StatusTooltip()
     private let visibleUsageProvidersKey = "visibleUsageProviders"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -33,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         button.action = #selector(statusClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.setAccessibilityLabel("GoModel request activity")
+        statusTooltip.isBlocked = { [weak self] in self?.popover.isShown == true }
         panel = PanelController(monitor: monitor, usage: usage)
         panel.resizeRequested = { [weak self] size, finished in self?.resizePanel(to: size, save: finished) }
         popover.contentViewController = panel
@@ -64,8 +67,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
+        // Provider quota/balance data is only fetched on launch and on manual
+        // refresh otherwise; keep the menu bar icons fresh in the background.
+        usageTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.usage.refresh() }
+        }
+        if let usageTimer { RunLoop.main.add(usageTimer, forMode: .common) }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification,
-            object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated { self?.monitor.reconnect() } }
+            object: nil, queue: .main) { [weak self] _ in MainActor.assumeIsolated {
+                self?.monitor.reconnect()
+                self?.usage.refresh()
+            } }
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
@@ -102,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
+        usageTimer?.invalidate()
         monitor.stop()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
@@ -118,13 +131,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             iconBuckets = buckets; iconConnected = monitor.connected
         }
         let description = "Last hour: \(success + failed) requests · \(success) successful · \(failed) failed"
-        statusItem?.button?.toolTip = description + "\n" + [monitor.connectionStatus, monitor.historyStatus].filter { !$0.isEmpty }.joined(separator: " · ")
+        if let button = statusItem?.button {
+            statusTooltip.setText(description + "\n" + [monitor.connectionStatus, monitor.historyStatus].filter { !$0.isEmpty }.joined(separator: " · "), for: button)
+        }
         statusItem?.button?.setAccessibilityValue(description)
         refreshUsageStatusItems()
         if popover.isShown { panel.refresh() }
     }
 
     @objc private func togglePanel() {
+        statusTooltip.suppressHover()
         if popover.isShown { popover.performClose(nil); return }
         guard let button = statusItem.button, let screen = button.window?.screen ?? NSScreen.main else { return }
         let usable = screen.visibleFrame
@@ -162,53 +178,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func statusClicked() {
+        statusTooltip.suppressHover()
         if NSApp.currentEvent?.type == .rightMouseUp || NSApp.currentEvent?.modifierFlags.contains(.control) == true {
-            popover.performClose(nil)
             guard let button = statusItem.button else { return }
-            let menu = NSMenu()
-            let configuration = NSMenuItem(title: "Configuration", action: #selector(editConfiguration), keyEquivalent: "")
-            configuration.target = self
-            menu.addItem(configuration)
-            let loginItem = NSMenuItem(title: "Start at login", action: #selector(toggleStartAtLogin(_:)), keyEquivalent: "")
-            loginItem.target = self
-            switch SMAppService.mainApp.status {
-            case .enabled:
-                loginItem.state = .on
-            case .requiresApproval:
-                loginItem.state = .mixed
-            case .notRegistered, .notFound:
-                loginItem.state = .off
-            @unknown default:
-                loginItem.state = .off
-            }
-            menu.addItem(loginItem)
-            let usageOptions = NSMenu()
-            let entries = usageStatusEntries()
-            let selected = Set(UserDefaults.standard.stringArray(forKey: visibleUsageProvidersKey) ?? [])
-            if entries.isEmpty {
-                let empty = NSMenuItem(title: "No providers configured", action: nil, keyEquivalent: "")
-                empty.isEnabled = false
-                usageOptions.addItem(empty)
-            } else {
-                for entry in entries {
-                    let item = NSMenuItem(title: entry.name, action: #selector(toggleUsageProvider(_:)), keyEquivalent: "")
-                    item.target = self
-                    item.representedObject = entry.id
-                    item.state = selected.contains(entry.id) ? .on : .off
-                    usageOptions.addItem(item)
-                }
-            }
-            let usageItem = NSMenuItem(title: "Usage icons", action: nil, keyEquivalent: "")
-            usageItem.submenu = usageOptions
-            menu.addItem(usageItem)
-            menu.addItem(.separator())
-            for (title, action) in [("Reconnect", #selector(reconnect)), ("Quit GoModel", #selector(quit))] {
-                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-                item.target = self; menu.addItem(item)
-            }
-            guard let event = NSApp.currentEvent else { return }
-            NSMenu.popUpContextMenu(menu, with: event, for: button)
+            showContextMenu(for: button)
         } else { togglePanel() }
+    }
+
+    @objc private func providerClicked(_ sender: NSStatusBarButton) {
+        statusTooltip.suppressHover()
+        if NSApp.currentEvent?.type == .rightMouseUp || NSApp.currentEvent?.modifierFlags.contains(.control) == true {
+            showContextMenu(for: sender)
+        } else { togglePanel() }
+    }
+
+    private func showContextMenu(for button: NSStatusBarButton) {
+        popover.performClose(nil)
+        let menu = NSMenu()
+        let configuration = NSMenuItem(title: "Configuration", action: #selector(editConfiguration), keyEquivalent: "")
+        configuration.target = self
+        menu.addItem(configuration)
+        let loginItem = NSMenuItem(title: "Start at login", action: #selector(toggleStartAtLogin(_:)), keyEquivalent: "")
+        loginItem.target = self
+        switch SMAppService.mainApp.status {
+        case .enabled:
+            loginItem.state = .on
+        case .requiresApproval:
+            loginItem.state = .mixed
+        case .notRegistered, .notFound:
+            loginItem.state = .off
+        @unknown default:
+            loginItem.state = .off
+        }
+        menu.addItem(loginItem)
+        let usageOptions = NSMenu()
+        let entries = usageStatusEntries()
+        let selected = Set(UserDefaults.standard.stringArray(forKey: visibleUsageProvidersKey) ?? [])
+        if entries.isEmpty {
+            let empty = NSMenuItem(title: "No providers configured", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            usageOptions.addItem(empty)
+        } else {
+            for entry in entries {
+                let item = NSMenuItem(title: entry.name, action: #selector(toggleUsageProvider(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = entry.id
+                item.state = selected.contains(entry.id) ? .on : .off
+                usageOptions.addItem(item)
+            }
+        }
+        let usageItem = NSMenuItem(title: "Usage icons", action: nil, keyEquivalent: "")
+        usageItem.submenu = usageOptions
+        menu.addItem(usageItem)
+        menu.addItem(.separator())
+        for (title, action) in [("Reconnect", #selector(reconnect)), ("Quit GoModel", #selector(quit))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self; menu.addItem(item)
+        }
+        guard let event = NSApp.currentEvent else { return }
+        NSMenu.popUpContextMenu(menu, with: event, for: button)
     }
 
     @objc private func reconnect() { monitor.reconnect() }
@@ -270,7 +298,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let selected = Set(UserDefaults.standard.stringArray(forKey: visibleUsageProvidersKey) ?? [])
         let visibleIDs = Set(entries.map(\.id)).intersection(selected)
         for id in Array(usageStatusItems.keys) where !visibleIDs.contains(id) {
-            if let item = usageStatusItems.removeValue(forKey: id) { NSStatusBar.system.removeStatusItem(item) }
+            guard let item = usageStatusItems.removeValue(forKey: id) else { continue }
+            statusTooltip.untrack(item.button)
+            NSStatusBar.system.removeStatusItem(item)
         }
         for entry in entries where visibleIDs.contains(entry.id) {
             let item = usageStatusItems[entry.id] ?? NSStatusBar.system.statusItem(withLength: 32)
@@ -279,11 +309,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             button.image = UsageStatusIcon.image(for: entry)
             button.imagePosition = .imageOnly
             button.target = self
-            button.action = #selector(togglePanel)
-            button.sendAction(on: [.leftMouseUp])
-            button.toolTip = UsageStatusIcon.tooltip(for: entry)
+            button.action = #selector(providerClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            statusTooltip.setText(UsageStatusIcon.tooltip(for: entry,
+                refreshedAt: usage.presentation.updatedAt,
+                refreshing: usage.presentation.isRefreshing), for: button)
             button.setAccessibilityLabel("\(entry.name) provider usage")
-            button.setAccessibilityValue(UsageStatusIcon.tooltip(for: entry))
+            button.setAccessibilityValue(UsageStatusIcon.tooltip(for: entry,
+                refreshedAt: usage.presentation.updatedAt,
+                refreshing: usage.presentation.isRefreshing))
         }
     }
 
@@ -326,15 +360,52 @@ private enum UsageStatusIcon {
         return image
     }
 
-    static func tooltip(for entry: UsageStatusEntry) -> String {
-        var details = [entry.name]
-        if let balance = entry.balance {
-            details.append(balance.balance ?? balance.error ?? "Balance unavailable")
-        }
+    static func tooltip(for entry: UsageStatusEntry, refreshedAt: Date? = nil,
+                        refreshing: Bool = false) -> String {
+        var lines = [entry.name]
         if let quota = entry.quota {
-            details += quota.quotas.map { "\($0.label): \(Int($0.availablePercent.rounded()))% available" }
+            lines += quota.quotas.map(quotaLine)
         }
-        return details.joined(separator: " · ")
+        if let balance = entry.balance {
+            if let value = balance.balance, !value.isEmpty {
+                lines.append("Balance: \(value)")
+            } else if let error = balance.error, !error.isEmpty {
+                lines.append("Balance unavailable: \(error)")
+            } else {
+                lines.append("Balance unavailable")
+            }
+        }
+        lines.append(refreshing ? "Refreshing…" : refreshedAgo(refreshedAt))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func refreshedAgo(_ date: Date?) -> String {
+        guard let date else { return "Data not refreshed yet" }
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return "Data refreshed just now" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "Data refreshed \(minutes)m ago" }
+        let hours = minutes / 60
+        if hours < 24 { return "Data refreshed \(hours)h \(minutes % 60)m ago" }
+        return "Data refreshed \(hours / 24)d ago"
+    }
+
+    private static func quotaLine(_ quota: UsageQuota) -> String {
+        let label = quota.label == "w" ? "weekly" : quota.label == "m" ? "monthly" : quota.label
+        let available = min(100, max(0, quota.availablePercent))
+        let percentage = String(format: "%.1f%% available", available)
+        guard let reset = quota.resetsAt else {
+            return "\(label): \(percentage) · reset time unavailable"
+        }
+        return "\(label): \(percentage) · resets in \(resetETA(reset))"
+    }
+
+    private static func resetETA(_ date: Date) -> String {
+        let seconds = max(0, Int(date.timeIntervalSinceNow))
+        let days = seconds / 86_400, hours = seconds % 86_400 / 3_600, minutes = seconds % 3_600 / 60
+        if days > 0 { return "\(days)d \(hours)h" }
+        if hours > 0 { return "\(hours)h \(minutes)m" }
+        return "\(max(1, minutes))m"
     }
 
     private static func drawBars(_ quotas: [UsageQuota], in area: NSRect) {
