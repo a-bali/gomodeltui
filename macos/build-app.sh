@@ -19,6 +19,11 @@ cp "$binary_directory/GoModelBar" "$app/Contents/MacOS/GoModelBar"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $bundle_version" "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $bundle_version" "$app/Contents/Info.plist"
+build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+/usr/libexec/PlistBuddy -c "Add :GoModelBuildDate string $build_date" "$app/Contents/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Set :GoModelBuildDate $build_date" "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :GoModelSourceVersion string $version" "$app/Contents/Info.plist" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Set :GoModelSourceVersion $version" "$app/Contents/Info.plist"
 cp ../LICENSE "$app/Contents/Resources/LICENSE"
 cp Resources/ThirdPartyNotices.txt "$app/Contents/Resources/ThirdPartyNotices.txt"
 iconset="$scratch_path/GoModel.iconset"

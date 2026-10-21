@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   balance-based providers, along with how long ago the data was refreshed.
   Right-clicking (or Control-clicking) any provider icon opens the same context
   menu as the main menu bar icon.
+- The macOS right-click menu has an **About GoModelBar** item showing the app
+  version, build date, and a link to the project's GitHub homepage.
 
 ### Changed
 

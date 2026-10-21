@@ -33,6 +33,8 @@ xattr -dr com.apple.quarantine /Applications/GoModel.app
 
 Use **Start at login** in the menu bar icon's right-click menu to register the
 app as a macOS login item. macOS may require approval in System Settings.
+**About GoModelBar** in the same menu shows the app version, build date, and a link
+to the project's GitHub homepage.
 
 For a preview with generated sample requests and no network connection:
 
@@ -209,8 +211,9 @@ after extraction. The JSON inspector keeps its full document until closed.
   with ligatures disabled.
 - Click outside, press Escape, or click the menu bar chart again to close the
   panel. Collection continues while closed. Right-click the menu bar icon for
-  **Usage icons**, **Reconnect**, **Configuration**, and **Quit GoModel**. The
-  panel has no footer toolbar.
+  **About GoModelBar**, **Usage icons**, **Reconnect**, **Configuration**, and
+  **Quit GoModel**. **About GoModelBar** shows the app version, build date, and a
+  link to the GitHub homepage. The panel has no footer toolbar.
 - A green/red circle beside the title shows connection state. Hover it for details.
 - Selecting already loaded chart intervals reuses their history. Connected
   stream coverage is accounted for before planning backfill, avoiding scans

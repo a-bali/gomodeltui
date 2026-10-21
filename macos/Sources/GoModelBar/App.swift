@@ -256,6 +256,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showContextMenu(for button: NSStatusBarButton) {
         popover.performClose(nil)
         let menu = NSMenu()
+        let about = NSMenuItem(title: "About GoModelBar", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        menu.addItem(.separator())
         let configuration = NSMenuItem(title: "Configuration", action: #selector(editConfiguration), keyEquivalent: "")
         configuration.target = self
         menu.addItem(configuration)
@@ -380,6 +384,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 refreshedAt: usage.presentation.updatedAt,
                 refreshing: usage.presentation.isRefreshing))
         }
+    }
+
+    @objc private func showAbout() {
+        popover.performClose(nil)
+        let repository = URL(string: "https://github.com/a-bali/gomodeltui")!
+        let sourceVersion = (Bundle.main.object(forInfoDictionaryKey: "GoModelSourceVersion") as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+        let bundleVersion = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+            .flatMap { $0.isEmpty || $0 == "0.0.0" ? nil : $0 }
+        let version = (sourceVersion ?? bundleVersion)
+            .map { $0.hasPrefix("v") ? String($0.dropFirst()) : $0 } ?? "development"
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "GoModelBar"
+        alert.icon = NSApp.applicationIconImage
+        alert.addButton(withTitle: "Close")
+        alert.accessoryView = aboutDetails(version: version, repository: repository)
+        alert.runModal()
+    }
+
+    private func aboutDetails(version: String, repository: URL) -> NSView {
+        let stack = NSStackView(views: [
+            aboutLabel("Version \(version)"),
+            aboutLabel("Built \(Self.buildDateDescription())"),
+            aboutLink(to: repository),
+        ])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.layoutSubtreeIfNeeded()
+        stack.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        return stack
+    }
+
+    private func aboutLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byClipping
+        label.usesSingleLineMode = true
+        label.maximumNumberOfLines = 1
+        return label
+    }
+
+    private func aboutLink(to url: URL) -> NSTextField {
+        let label = NSTextField(labelWithString: "")
+        label.isSelectable = true
+        label.allowsEditingTextAttributes = true
+        label.lineBreakMode = .byClipping
+        label.usesSingleLineMode = true
+        label.maximumNumberOfLines = 1
+        label.attributedStringValue = NSAttributedString(string: url.absoluteString, attributes: [
+            .link: url,
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ])
+        return label
+    }
+
+    private static func buildDateDescription() -> String {
+        let date: Date?
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "GoModelBuildDate") as? String {
+            date = ISO8601DateFormatter().date(from: raw)
+        } else if let executable = Bundle.main.executableURL {
+            date = try? executable.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        } else {
+            date = nil
+        }
+        guard let date else { return "unknown" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     @objc private func editConfiguration() {
