@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var dismissMonitors: [Any] = []
     private var usageTimer: Timer?
     private var lastPopoverClose: Date?
+    private var aboutWindow: NSWindow?
     private let statusTooltip = StatusTooltip()
     private let visibleUsageProvidersKey = "visibleUsageProviders"
 
@@ -396,26 +397,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let version = (sourceVersion ?? bundleVersion)
             .map { $0.hasPrefix("v") ? String($0.dropFirst()) : $0 } ?? "development"
         NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "GoModelBar"
-        alert.icon = NSApp.applicationIconImage
-        alert.addButton(withTitle: "Close")
-        alert.accessoryView = aboutDetails(version: version, repository: repository)
-        alert.runModal()
+        if let aboutWindow {
+            aboutWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        let window = makeAboutWindow(version: version, repository: repository)
+        aboutWindow = window
+        window.makeKeyAndOrderFront(nil)
     }
 
-    private func aboutDetails(version: String, repository: URL) -> NSView {
+    private func makeAboutWindow(version: String, repository: URL) -> NSWindow {
+        let window = AboutWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 300),
+                                 styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "About GoModelBar"
+        window.isReleasedWhenClosed = false
+
+        let icon = NSImageView(image: NSApp.applicationIconImage)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 96),
+            icon.heightAnchor.constraint(equalToConstant: 96),
+        ])
+
+        let name = NSTextField(labelWithString: "GoModelBar")
+        name.font = .systemFont(ofSize: 20, weight: .semibold)
+        name.alignment = .center
+
         let stack = NSStackView(views: [
+            icon,
+            name,
             aboutLabel("Version \(version)"),
             aboutLabel("Built \(Self.buildDateDescription())"),
             aboutLink(to: repository),
         ])
         stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.layoutSubtreeIfNeeded()
-        stack.frame = NSRect(origin: .zero, size: stack.fittingSize)
-        return stack
+        stack.alignment = .centerX
+        stack.spacing = 6
+        stack.setCustomSpacing(12, after: icon)
+        stack.setCustomSpacing(12, after: name)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let content = NSView()
+        content.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 22),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -22),
+        ])
+        window.contentView = content
+        content.layoutSubtreeIfNeeded()
+        window.setContentSize(NSSize(width: 340, height: stack.fittingSize.height + 44))
+        window.center()
+        return window
     }
 
     private func aboutLabel(_ text: String) -> NSTextField {
@@ -653,4 +686,9 @@ enum GoModelBarApp {
         application.delegate = delegate
         withExtendedLifetime(delegate) { application.run() }
     }
+}
+
+@MainActor
+private final class AboutWindow: NSWindow {
+    override func cancelOperation(_ sender: Any?) { performClose(nil) }
 }
