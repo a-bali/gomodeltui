@@ -23,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var iconBuckets: [ChartBucket]?
     private var iconConnected: Bool?
     private var usageStatusItems: [String: NSStatusItem] = [:]
+    private var dismissMonitors: [Any] = []
     private var usageTimer: Timer?
+    private var lastPopoverClose: Date?
     private let statusTooltip = StatusTooltip()
     private let visibleUsageProvidersKey = "visibleUsageProviders"
 
@@ -38,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusTooltip.isBlocked = { [weak self] in self?.popover.isShown == true }
         panel = PanelController(monitor: monitor, usage: usage)
         panel.resizeRequested = { [weak self] size, finished in self?.resizePanel(to: size, save: finished) }
+        panel.dismissRequested = { [weak self] in self?.popover.performClose(nil) }
         popover.contentViewController = panel
         popover.behavior = .semitransient
         popover.animates = false
@@ -113,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        removeDismissMonitors()
         timer?.invalidate()
         usageTimer?.invalidate()
         monitor.stop()
@@ -142,6 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func togglePanel() {
         statusTooltip.suppressHover()
         if popover.isShown { popover.performClose(nil); return }
+        // A click on a status item can close the popover before the button
+        // action runs on mouse-up; don't immediately reopen it in that case.
+        if let closedAt = lastPopoverClose, Date().timeIntervalSince(closedAt) < 0.3 { return }
         guard let button = statusItem.button, let screen = button.window?.screen ?? NSScreen.main else { return }
         let usable = screen.visibleFrame
         let preferences = UserDefaults.standard
@@ -156,6 +163,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func popoverDidShow(_ notification: Notification) {
         panel.refresh()
+        installDismissMonitors()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        lastPopoverClose = Date()
+        removeDismissMonitors()
+    }
+
+    /// `NSPopover`'s transient behaviors do not reliably close an accessory
+    /// app's popover when it never became the active app, so dismiss explicitly
+    /// on any mouse-down outside the popover. The status item's own window is
+    /// excluded so its action can keep toggling the panel.
+    private func installDismissMonitors() {
+        removeDismissMonitors()
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self, self.popover.isShown else { return }
+                let popoverWindow = self.popover.contentViewController?.view.window
+                guard event.window !== popoverWindow, !self.clickedStatusItem() else { return }
+                self.popover.performClose(nil)
+            }
+            return event
+        }) {
+            dismissMonitors.append(local)
+        }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.popover.isShown else { return }
+                self.popover.performClose(nil)
+            }
+        }) {
+            dismissMonitors.append(global)
+        }
+    }
+
+    /// Status item clicks must reach their own action so it can toggle the
+    /// popover. Their events may have no window or a private status-bar window,
+    /// so test the click location against every status item's button instead.
+    private func clickedStatusItem() -> Bool {
+        let point = NSEvent.mouseLocation
+        var buttons: [NSStatusBarButton] = []
+        if let button = statusItem.button { buttons.append(button) }
+        buttons.append(contentsOf: usageStatusItems.values.compactMap(\.button))
+        return buttons.contains { button in
+            guard let window = button.window, window.isVisible else { return false }
+            let inWindow = window.convertPoint(fromScreen: point)
+            return button.bounds.contains(button.convert(inWindow, from: nil))
+        }
+    }
+
+    private func removeDismissMonitors() {
+        for monitor in dismissMonitors { NSEvent.removeMonitor(monitor) }
+        dismissMonitors.removeAll()
     }
 
     private func constrainedSize(_ size: NSSize, on screen: NSScreen) -> NSSize {

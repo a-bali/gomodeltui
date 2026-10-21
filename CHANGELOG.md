@@ -29,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require Go 1.26 or newer and update the TUI rendering dependencies, including
   Bubble Tea and the compatible ANSI/cell buffer packages.
 
+### Fixed
+
+- The macOS dropdown now dismisses when clicking outside it, including in other
+  apps and on the desktop. The request JSON inspector opened from a log row is
+  now an independent regular window (not a panel) that stays open when the app
+  is deactivated or the user clicks outside it, and the dropdown closes when
+  the inspector opens so the two do not overlap. Clicking a menu bar icon while
+  the dropdown is open now closes it instead of immediately reopening it.
+
 ## [1.1.0] - 2026-10-20
 
 ### Added

@@ -23,6 +23,7 @@ final class PanelController: NSViewController {
     private var usageHeightConstraint: NSLayoutConstraint!
     private var preferredChartHeight: CGFloat = 148
     var resizeRequested: ((NSSize, Bool) -> Void)?
+    var dismissRequested: (() -> Void)?
 
     init(monitor: Monitor, usage: UsageManager) { self.monitor = monitor; self.usage = usage; super.init(nibName: nil, bundle: nil) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -138,6 +139,9 @@ final class PanelController: NSViewController {
             guard let self else { return }
             if self.inspector == nil { self.inspector = JSONInspectorController() }
             self.inspector?.show(record: record, loader: self.monitor.detailLoader(for: record), relativeTo: self.view.window)
+            // The inspector is a regular window; close the dropdown so it is
+            // not covered by the popover's higher window level.
+            self.dismissRequested?()
         }
     }
 

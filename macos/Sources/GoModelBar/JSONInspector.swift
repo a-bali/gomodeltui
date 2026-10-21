@@ -468,7 +468,7 @@ final class JSONInspectorViewController: NSViewController, NSOutlineViewDataSour
 }
 
 @MainActor
-private final class InspectorPanel: NSPanel {
+private final class InspectorWindow: NSWindow {
     override func cancelOperation(_ sender: Any?) { close() }
 }
 
@@ -477,16 +477,15 @@ final class JSONInspectorController: NSWindowController, NSWindowDelegate {
     let inspector = JSONInspectorViewController()
     private(set) var loadTask: Task<Void, Never>?
     private var generation = UUID()
-    private weak var parentWindow: NSWindow?
 
     init() {
-        let panel = InspectorPanel(contentRect: NSRect(x: 0, y: 0, width: 920, height: 640), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-        // NSPopover windows sit at the pop-up menu level. Match that level so
-        // the inspector remains visible above the dropdown when opened from a row.
-        panel.isReleasedWhenClosed = false; panel.level = .popUpMenu
-        panel.minSize = NSSize(width: 460, height: 320)
-        super.init(window: panel)
-        panel.contentViewController = inspector; panel.delegate = self
+        let window = InspectorWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 640), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+        // A regular NSWindow, not an NSPanel: panels are hidden whenever the
+        // app is deactivated, which made the inspector vanish on outside clicks.
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 460, height: 320)
+        super.init(window: window)
+        window.contentViewController = inspector; window.delegate = self
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
@@ -494,11 +493,6 @@ final class JSONInspectorController: NSWindowController, NSWindowDelegate {
         loadTask?.cancel()
         let token = UUID(); generation = token
         inspector.reset()
-        if let source, let window, parentWindow !== source {
-            parentWindow?.removeChildWindow(window)
-            source.addChildWindow(window, ordered: .above)
-            parentWindow = source
-        }
         window?.title = "Request JSON · " + record.id
         if window?.isVisible != true, let screen = source?.screen ?? NSScreen.main {
             let area = screen.visibleFrame
@@ -532,8 +526,6 @@ final class JSONInspectorController: NSWindowController, NSWindowDelegate {
         }
     }
     func windowWillClose(_ notification: Notification) {
-        if let window, let parentWindow { parentWindow.removeChildWindow(window) }
-        parentWindow = nil
         generation = UUID(); loadTask?.cancel(); loadTask = nil
         inspector.reset(message: "")
     }
